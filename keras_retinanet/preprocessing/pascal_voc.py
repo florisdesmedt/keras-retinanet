@@ -15,27 +15,26 @@ import numpy as np
 import time
 
 voc_classes = {
-    '__background__' : 0,
-    'aeroplane'      : 1,
-    'bicycle'        : 2,
-    'bird'           : 3,
-    'boat'           : 4,
-    'bottle'         : 5,
-    'bus'            : 6,
-    'car'            : 7,
-    'cat'            : 8,
-    'chair'          : 9,
-    'cow'            : 10,
-    'diningtable'    : 11,
-    'dog'            : 12,
-    'horse'          : 13,
-    'motorbike'      : 14,
-    'person'         : 15,
-    'pottedplant'    : 16,
-    'sheep'          : 17,
-    'sofa'           : 18,
-    'train'          : 19,
-    'tvmonitor'      : 20
+    'aeroplane'      : 0,
+    'bicycle'        : 1,
+    'bird'           : 2,
+    'boat'           : 3,
+    'bottle'         : 4,
+    'bus'            : 5,
+    'car'            : 6,
+    'cat'            : 7,
+    'chair'          : 8,
+    'cow'            : 9,
+    'diningtable'    : 10,
+    'dog'            : 11,
+    'horse'          : 12,
+    'motorbike'      : 13,
+    'person'         : 14,
+    'pottedplant'    : 15,
+    'sheep'          : 16,
+    'sofa'           : 17,
+    'train'          : 18,
+    'tvmonitor'      : 19
 }
 
 
@@ -139,13 +138,12 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
             image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
             # generate the label and regression targets
-            labels, regression_targets = anchor_targets(image, boxes_batch[0])
-            regression_targets         = np.append(regression_targets, np.expand_dims(labels, axis=1), axis=1)
+            labels, regression_targets = anchor_targets(image, boxes_batch[0], len(self.classes))
+            regression_targets         = np.append(regression_targets, labels, axis=1)
 
             # convert target to batch (currently only batch_size = 1 is allowed)
             regression_batch = np.expand_dims(regression_targets, axis=0)
             labels_batch     = np.expand_dims(labels, axis=0)
-            labels_batch     = np.expand_dims(labels_batch, axis=2)
 
         # convert the image to zero-mean
         image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
