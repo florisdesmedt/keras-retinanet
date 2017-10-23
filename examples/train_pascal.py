@@ -35,6 +35,9 @@ if __name__ == '__main__':
     # parse arguments
     args = parse_args()
 
+    # TODO fds: make batch
+    batch_size = 1
+
     # create the model
     print('Creating model, this may take a second...')
     model = create_model()
@@ -62,7 +65,8 @@ if __name__ == '__main__':
     train_generator = PascalVocIterator(
         args.voc_path,
         'trainval',
-        train_image_data_generator
+        train_image_data_generator,
+        batch_size=batch_size
     )
 
     # create a generator for testing data
@@ -73,7 +77,7 @@ if __name__ == '__main__':
     )
 
     # start training
-    batch_size = 1
+
     model.fit_generator(
         generator=train_generator,
         steps_per_epoch=len(train_generator.image_names) // batch_size,
