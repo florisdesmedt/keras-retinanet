@@ -10,7 +10,7 @@ from keras_retinanet.preprocessing import PascalVocIteratorBatch
 import keras_retinanet
 
 import tensorflow as tf
-
+import numpy as np
 
 def get_session():
     config = tf.ConfigProto()
@@ -57,7 +57,7 @@ if __name__ == '__main__':
     # create image data generator objects
     train_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
         rescale=1.0 / 255.0,
-        #horizontal_flip=True,
+        horizontal_flip=True,
 
         #width_shift_range=0.1,
         #height_shift_range=0.1,
@@ -67,43 +67,24 @@ if __name__ == '__main__':
         rescale=1.0 / 255.0,
     )
 
-    import numpy as np
-    # create a generator for training data
-    train_generator = PascalVocIterator(
-        args.voc_path,
-        'trainval',
-        train_image_data_generator,
-        batch_size=1,
-        seed=np.uint32(1)
-    )
-
-    # create a generator for training data
-    train_generator_batch = PascalVocIteratorBatch(
-        args.voc_path,
-        'trainval',
-        train_image_data_generator,
-        batch_size=batch_size,
-        seed=np.uint32(1)
-    )
-
-    # import cv2
-    # # import time
-    # for i in range(0,100000):
-    # #    start_time = time.time()
-    #     batch = train_generator.next()
-    #     #print("size of batch is: {}".format(len(batch[0])))
-    #     print("From Single")
-    #     print(batch[1][0])
-    #     cv2.imshow("image", batch[0][0])
-    #     batch = train_generator_batch.next()
-    #     print("From Batch")
-    #     print(batch[1][0])
-    #
-    #
-    #     for j in range(0,len(batch[0])):
-    #         cv2.imshow("image2_" + str(j), batch[0][j])
-    #     cv2.waitKey(0)
-    #    print("duration is {}".format(time.time() - start_time))
+    if batch_size == 1:
+        # create a generator for training data
+        train_generator = PascalVocIterator(
+            args.voc_path,
+            'trainval',
+            train_image_data_generator,
+            batch_size=1,
+            seed=np.uint32(1)
+        )
+    else:
+        # create a generator for training data
+        train_generator = PascalVocIteratorBatch(
+            args.voc_path,
+            'trainval',
+            train_image_data_generator,
+            batch_size=batch_size,
+            seed=np.uint32(1)
+        )
 
     # create a generator for testing data
     test_generator = PascalVocIterator(
@@ -115,7 +96,7 @@ if __name__ == '__main__':
     # start training
     #
     model.fit_generator(
-        generator=train_generator_batch,
+        generator=train_generator,
         steps_per_epoch=len(train_generator.image_names) // batch_size,
         epochs=50,
         verbose=1,

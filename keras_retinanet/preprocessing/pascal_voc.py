@@ -124,7 +124,7 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
             path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
             image = cv2.imread(path, cv2.IMREAD_COLOR)
 
-            #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
 
 
             # set ground truth boxes
@@ -133,7 +133,7 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
 
             # scale the ground truth boxes to the selected image scale
             #
-            # boxes_batch[batch_index, :, :4] *= image_scale
+            boxes_batch[batch_index, :, :4] *= image_scale
 
             # convert to batches (currently only batch_size = 1 is allowed)
             image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
@@ -274,7 +274,7 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             bottom_padding = max_height - image.shape[0]
             image = cv2.copyMakeBorder(image,top_padding,bottom_padding,left_padding,right_padding,cv2.BORDER_CONSTANT,0)
 
-            #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
 
             #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
             #image_scale = 1.0
@@ -296,7 +296,7 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             # scale the ground truth boxes to the selected image scale
             # TODO: since all images are padded to the same size, this operation could be performed on the
             # whole batch
-            #boxes_batch[batch_index, :, :4] *= image_scale
+            boxes_batch[batch_index, :, :4] *= image_scale
 
         #print("Just_images {}".format(time.time() - s_time))
         # randomly transform images and boxes simultaneously
