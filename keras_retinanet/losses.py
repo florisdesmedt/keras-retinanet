@@ -4,6 +4,7 @@ import keras_retinanet
 
 def focal_loss(alpha=0.25, gamma=2.0):
     def _focal_loss(y_true, y_pred):
+        print("to calculate losses, the size of ground truth: {}   while predictions: {}".format(y_true.shape, y_pred.shape))
         labels         = y_true[0, :, 0]
         classification = y_pred[0, :, :]
 

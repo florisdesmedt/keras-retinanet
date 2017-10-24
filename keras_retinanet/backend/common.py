@@ -29,6 +29,9 @@ def bbox_transform_inv(boxes, deltas):
     pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
 
     pred_boxes = keras.backend.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], axis=1)
+
+
+    # TODO fds: batch??
     pred_boxes = keras.backend.expand_dims(pred_boxes, axis=0)
 
     return pred_boxes

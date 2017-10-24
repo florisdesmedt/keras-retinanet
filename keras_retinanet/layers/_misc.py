@@ -26,6 +26,8 @@ class Anchors(keras.layers.Layer):
 
         # generate proposals from bbox deltas and shifted anchors
         anchors = keras_retinanet.backend.shift(features_shape, self.anchor_stride, self.anchors)
+
+        # TODO fds: BATCH?
         anchors = keras.backend.expand_dims(anchors, axis=0)
 
         return anchors
@@ -139,7 +141,9 @@ class NonMaximumSuppression(keras.layers.Layer):
         indices = keras_retinanet.backend.non_max_suppression(boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
 
         # TODO: support batch size > 1.
+        print("KER: {}  indices {}".format(detections, indices))
         detections = keras.backend.gather(detections, indices)
+
         return keras.backend.expand_dims(detections, axis=0)
 
     def compute_output_shape(self, input_shape):
@@ -166,6 +170,7 @@ class UpsampleLike(keras.layers.Layer):
 class RegressBoxes(keras.layers.Layer):
     def call(self, inputs, **kwargs):
         anchors, regression = inputs
+        # TODO BATCH FRIENDLY??
         return keras_retinanet.backend.bbox_transform_inv(anchors, regression)
 
     def compute_output_shape(self, input_shape):
