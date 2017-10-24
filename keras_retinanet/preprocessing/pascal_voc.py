@@ -123,14 +123,17 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
         for batch_index, image_index in enumerate(selection):
             path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
             image = cv2.imread(path, cv2.IMREAD_COLOR)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+            #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
 
             # set ground truth boxes
             boxes = np.expand_dims(self.parse_annotations(self.image_names[image_index]), axis=0)
             boxes_batch = np.append(boxes_batch, boxes, axis=1)
 
             # scale the ground truth boxes to the selected image scale
-            boxes_batch[batch_index, :, :4] *= image_scale
+            #
+            # boxes_batch[batch_index, :, :4] *= image_scale
 
             # convert to batches (currently only batch_size = 1 is allowed)
             image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
@@ -240,7 +243,6 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             max_annotations = boxes.shape[0]
            # print("there are only {} GT in this image".format(max_annotations))
 
-
         # transformation of images is not under thread lock so it can be done in parallel
         boxes_batch = np.zeros((batch_size, max_annotations, 5), dtype=keras.backend.floatx())
 
@@ -259,12 +261,12 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
 
         initialised = False
         s_time = time.time()
-        print("Selection is {}".format(selection))
+        #print("Selection is {}".format(selection))
         for batch_index, image_index in enumerate(selection):
             # pad image when necessary
             image = temp_image_batch[batch_index]
-            cv2.imshow("Internal", image)
-            cv2.waitKey(0)
+            #cv2.imshow("Internal", image)
+            #cv2.waitKey(0)
 
             top_padding = 0
             left_padding = 0
@@ -273,7 +275,9 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             image = cv2.copyMakeBorder(image,top_padding,bottom_padding,left_padding,right_padding,cv2.BORDER_CONSTANT,0)
 
             #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+            #image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+            #image_scale = 1.0
 
             #image_for_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
             if not initialised:
@@ -292,7 +296,7 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             # scale the ground truth boxes to the selected image scale
             # TODO: since all images are padded to the same size, this operation could be performed on the
             # whole batch
-            boxes_batch[batch_index, :, :4] *= image_scale
+            #boxes_batch[batch_index, :, :4] *= image_scale
 
         #print("Just_images {}".format(time.time() - s_time))
         # randomly transform images and boxes simultaneously
@@ -318,9 +322,9 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             if not initialised:
                 #regression_batch = np.zeros((batch_size,regression_targets.shape[0],regression_targets.shape[1]),dtype=np.int32)
 
-                regression_batch = np.ndarray(shape=(batch_size,regression_targets.shape[0],regression_targets.shape[1]),dtype=np.int32)
+                regression_batch = np.ndarray(shape=(batch_size,regression_targets.shape[0],regression_targets.shape[1]),dtype=np.float32)
                 #labels_batch = np.zeros((batch_size,labels.shape[0], labels.shape[1]),dtype=np.int32)
-                labels_batch = np.ndarray(shape=(batch_size,labels.shape[0], labels.shape[1]),dtype=np.int32)
+                labels_batch = np.ndarray(shape=(batch_size,labels.shape[0], labels.shape[1]),dtype=np.float32)
                 initialised = True
             #print("init {}".format(time.time() - ss_time))
             ss_time = time.time()

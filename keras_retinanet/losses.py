@@ -4,9 +4,12 @@ import keras_retinanet
 
 def focal_loss(alpha=0.25, gamma=2.0):
     def _focal_loss(y_true, y_pred):
-        print("to calculate losses, the size of ground truth: {}   while predictions: {}".format(y_true.shape, y_pred.shape))
-        labels         = y_true[0, :, 0]
-        classification = y_pred[0, :, :]
+
+        labels         = y_true[:, :, 0]
+        classification = y_pred[:, :, :]
+
+        #labels = y_true[0, :, 0]
+        #classification = y_pred[0, :, :]
 
         indices        = keras_retinanet.backend.where(keras.backend.not_equal(labels, -1))
         classification = keras_retinanet.backend.gather_nd(classification, indices)
@@ -53,6 +56,7 @@ def regression_loss(y_true, y_pred):
     regression_diff = keras.backend.sum(regression_diff)
     divisor         = keras.backend.maximum(keras.backend.shape(indices)[0], 1)
     divisor         = keras.backend.cast(divisor, keras.backend.floatx())
+
     return regression_diff / divisor
 
     #def _focal_loss(y_true, y_pred):

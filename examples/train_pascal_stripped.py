@@ -47,7 +47,9 @@ if __name__ == '__main__':
     model = create_model()
 
     # compile model (note: set loss to None since loss is added inside layer)
-    model.compile(loss={'regression': keras_retinanet.losses.regression_loss, 'classification': keras_retinanet.losses.focal_loss()}, optimizer=keras.optimizers.adam(lr=1e-5, clipnorm=0.001))
+    model.compile(loss={'regression': keras_retinanet.losses.regression_loss,
+                        'classification': keras_retinanet.losses.focal_loss()},
+                  optimizer=keras.optimizers.adam(lr=1e-5, clipnorm=0.001))
 
     # print model summary
     print(model.summary())
@@ -67,7 +69,7 @@ if __name__ == '__main__':
 
     import numpy as np
     # create a generator for training data
-    train_generator = PascalVocIteratorBatch(
+    train_generator = PascalVocIterator(
         args.voc_path,
         'trainval',
         train_image_data_generator,
@@ -84,40 +86,46 @@ if __name__ == '__main__':
         seed=np.uint32(1)
     )
 
-    import cv2
-    # import time
-    for i in range(0,100000):
-    #    start_time = time.time()
-        batch = train_generator.next()
-        print("size of batch is: {}".format(len(batch[0])))
-        cv2.imshow("image", batch[0][0])
-        batch = train_generator_batch.next()
-        for j in range(0,len(batch[0])):
-            cv2.imshow("image2_" + str(j), batch[0][j])
-        cv2.waitKey(0)
+    # import cv2
+    # # import time
+    # for i in range(0,100000):
+    # #    start_time = time.time()
+    #     batch = train_generator.next()
+    #     #print("size of batch is: {}".format(len(batch[0])))
+    #     print("From Single")
+    #     print(batch[1][0])
+    #     cv2.imshow("image", batch[0][0])
+    #     batch = train_generator_batch.next()
+    #     print("From Batch")
+    #     print(batch[1][0])
+    #
+    #
+    #     for j in range(0,len(batch[0])):
+    #         cv2.imshow("image2_" + str(j), batch[0][j])
+    #     cv2.waitKey(0)
     #    print("duration is {}".format(time.time() - start_time))
 
     # create a generator for testing data
-    # test_generator = PascalVocIterator(
-    #     args.voc_path,
-    #     'test',
-    #     test_image_data_generator
-    # )
-    # #
-    # # start training
-    # #
-    # model.fit_generator(
-    #     generator=train_generator,
-    #     steps_per_epoch=len(train_generator.image_names) // batch_size,
-    #     epochs=50,
-    #     verbose=1,
-    #     validation_data=test_generator,
-    #     validation_steps=500,  # len(test_generator.image_names) // batch_size,
-    #     callbacks=[
-    #         keras.callbacks.ModelCheckpoint('snapshots/resnet50_voc_best.h5', monitor='val_loss', verbose=1, save_best_only=True),
-    #         keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
-    #     ],
-    # )
-    # #
-    # # # store final result too
-    # model.save('snapshots/resnet50_voc_final.h5')
+    test_generator = PascalVocIterator(
+        args.voc_path,
+        'test',
+        test_image_data_generator
+    )
+
+    # start training
+    #
+    model.fit_generator(
+        generator=train_generator_batch,
+        steps_per_epoch=len(train_generator.image_names) // batch_size,
+        epochs=50,
+        verbose=1,
+        validation_data=test_generator,
+        validation_steps=500,  # len(test_generator.image_names) // batch_size,
+        callbacks=[
+            keras.callbacks.ModelCheckpoint('snapshots/resnet50_voc_best.h5', monitor='val_loss', verbose=1, save_best_only=True),
+            keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=10, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
+        ],
+    )
+    #
+    # # store final result too
+    model.save('snapshots/resnet50_voc_final.h5')
