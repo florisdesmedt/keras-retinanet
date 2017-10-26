@@ -1,3 +1,19 @@
+"""
+Copyright 2017-2018 Fizyr (https://fizyr.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 from __future__ import division
 
 import keras.applications.imagenet_utils
@@ -110,37 +126,32 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
 
         return boxes
 
-    def next(self):
-        # lock indexing to prevent race conditions
-        with self.lock:
-            selection, _, batch_size = next(self.index_generator)
-
-        assert(batch_size == 1), "Currently only batch_size=1 is allowed."
-
-        # transformation of images is not under thread lock so it can be done in parallel
-        boxes_batch = np.zeros((batch_size, 0, 5), dtype=keras.backend.floatx())
-
-        for batch_index, image_index in enumerate(selection):
-            path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
-            image = cv2.imread(path, cv2.IMREAD_COLOR)
-
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+    def load_image(self, image_index):
+        path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
+        image = cv2.imread(path, cv2.IMREAD_COLOR)
+        image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
 
 
-            # set ground truth boxes
-            boxes = np.expand_dims(self.parse_annotations(self.image_names[image_index]), axis=0)
-            boxes_batch = np.append(boxes_batch, boxes, axis=1)
+        # set ground truth boxes
+        boxes_batch = np.zeros((1, 0, 5), dtype=keras.backend.floatx())
+        boxes       = np.expand_dims(self.parse_annotations(self.image_names[image_index]), axis=0)
+        boxes_batch = np.append(boxes_batch, boxes, axis=1)
 
-            # scale the ground truth boxes to the selected image scale
-            #
-            boxes_batch[batch_index, :, :4] *= image_scale
+        # scale the ground truth boxes to the selected image scale
+        boxes_batch[0, :, :4] *= image_scale
 
-            # convert to batches (currently only batch_size = 1 is allowed)
-            image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
+        # convert to batches (currently only batch_size = 1 is allowed)
+        image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
 
-            # randomly transform images and boxes simultaneously
-            image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
+        # randomly transform images and boxes simultaneously
+        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+
+        # generate the label and regression targets
+        labels, regression_targets = anchor_targets(image, boxes_batch[0])
+        regression_targets         = np.append(regression_targets, np.expand_dims(labels, axis=1), axis=1)
+
+<<<<<<< HEAD
             # generate the label and regression targets
             labels, regression_targets = anchor_targets(image, boxes_batch[0])
             regression_targets         = np.append(regression_targets, labels, axis=1)
@@ -336,9 +347,35 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             labels_batch[batch_index] = labels
             #print("assign 2 {}".format(time.time() - ss_time))
         #print("second part {}".format(time.time() - s2_time))
+=======
+        # convert target to batch (currently only batch_size = 1 is allowed)
+        regression_batch = np.expand_dims(regression_targets, axis=0)
+        labels_batch     = np.expand_dims(labels, axis=0)
+        labels_batch     = np.expand_dims(labels_batch, axis=2)
+>>>>>>> unit-tests
 
         # convert the image to zero-mean
         image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
         image_batch = self.image_data_generator.standardize(image_batch)
 
-        return image_batch, [regression_batch, labels_batch]
+        return {
+            'image'            : image,
+            'image_scale'      : image_scale,
+            'boxes_batch'      : boxes_batch,
+            'image_batch'      : image_batch,
+            'regression_batch' : regression_batch,
+            'labels_batch'     : labels_batch,
+        }
+
+    def next(self):
+        # lock indexing to prevent race conditions
+        with self.lock:
+            selection, _, batch_size = next(self.index_generator)
+
+        assert(batch_size == 1), "Currently only batch_size=1 is allowed."
+        assert(len(selection) == 1), "Currently only batch_size=1 is allowed."
+
+        # transformation of images is not under thread lock so it can be done in parallel
+        image_data = self.load_image(selection[0])
+
+        return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
