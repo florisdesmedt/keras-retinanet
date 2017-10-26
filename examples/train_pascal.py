@@ -52,7 +52,7 @@ def parse_args():
 if __name__ == '__main__':
     # parse arguments
     args = parse_args()
-    batch_size = args.batch
+    batch_size = int(args.batch)
 
     # optionally choose specific GPU
     if args.gpu:
