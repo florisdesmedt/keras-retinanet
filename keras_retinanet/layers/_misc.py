@@ -45,12 +45,12 @@ class Anchors(keras.layers.Layer):
         features = inputs
         features_shape = keras.backend.shape(features)[1:3]
         batch_size = keras.backend.int_shape(features)[0]
-        print("featshape {}".format(batch_size))
         # generate proposals from bbox deltas and shifted anchors
         anchors = keras_retinanet.backend.shift(features_shape, self.stride, self.anchors)
 
         anchors = keras.backend.expand_dims(anchors, axis=0)
-        anchors = keras.backend.repeat_elements(anchors, batch_size, axis=0)
+        if batch_size:
+            anchors = keras.backend.repeat_elements(anchors, batch_size, axis=0)
         #anchors.append(anchors[0])
 
 
