@@ -52,7 +52,7 @@ class TestAnchors(object):
         np.testing.assert_array_equal(anchors, expected)
 
     # mark test to fail
-    @pytest.mark.xfail
+    #@pytest.mark.xfail
     def test_mini_batch(self):
         # create simple Anchors layer
         anchors_layer = keras_retinanet.layers.Anchors(
