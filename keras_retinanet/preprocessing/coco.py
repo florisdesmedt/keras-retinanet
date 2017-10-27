@@ -149,6 +149,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
 
         return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
 
+
 class CocoIteratorBatch(keras.preprocessing.image.Iterator):
     def __init__(
         self,
@@ -191,39 +192,24 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
             self.labels[value] = key
 
     def load_images(self, image_indeces):
-
-        max_annotations = 50
         batch_size = len(image_indeces)
 
-        temp_image_storage = []
-        temp_coco_image_storage = []
-        max_height = 0
-        max_width = 0
-        for batch_index in range(0,batch_size):
-            coco_image         = self.coco.loadImgs(self.image_ids[image_indeces[batch_index]])[0]
-            path               = os.path.join(self.data_dir, 'images', self.set_name, coco_image['file_name'])
-            image              = cv2.imread(path, cv2.IMREAD_COLOR)
-            temp_image_storage.append(image)
-            temp_coco_image_storage.append(coco_image)
-            if max_height < image.shape[0]:
-                max_height = image.shape[0]
-            if max_width < image.shape[1]:
-                max_width = image.shape[1]
-
+        max_annotations = 300
+        # set ground truth boxes
         boxes_batch = np.zeros((batch_size, max_annotations, 5), dtype=keras.backend.floatx())
+
         valid_boxes = []
-        initialised = False
-        for batch_index in range(0, batch_size):
-            image = temp_image_storage[batch_index]
-            coco_image = temp_coco_image_storage[batch_index]
-            # pad image
-            top_padding = 0
-            left_padding = 0
-            right_padding = max_width - image.shape[1]
-            bottom_padding = max_height - image.shape[0]
-            image = cv2.copyMakeBorder(image, top_padding, bottom_padding, left_padding, right_padding,
-                                       cv2.BORDER_CONSTANT, 0)
+        temp_image_storage = []
+        max_width = 0
+        max_height = 0
+        for b in range(0,batch_size):
+            coco_image = self.coco.loadImgs(self.image_ids[b])[0]
+            path = os.path.join(self.data_dir, 'images', self.set_name, coco_image['file_name'])
+            image = cv2.imread(path, cv2.IMREAD_COLOR)
             image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+            temp_image_storage.append(image)
+            max_width = max(max_width, image.shape[1])
+            max_height = max(max_height, image.shape[0])
 
             # set ground truth boxes
             annotations_ids = self.coco.getAnnIds(imgIds=coco_image['id'], iscrowd=False)
@@ -234,12 +220,12 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
 
             # parse annotations
             annotations = self.coco.loadAnns(annotations_ids)
-            boxes       = np.zeros((0, 5), dtype=keras.backend.floatx())
+            boxes = np.zeros((0, 5), dtype=keras.backend.floatx())
             for idx, a in enumerate(annotations):
-                box        = np.zeros((1, 5), dtype=keras.backend.floatx())
+                box = np.zeros((1, 5), dtype=keras.backend.floatx())
                 box[0, :4] = a['bbox']
-                box[0, 4]  = a['category_id']
-                boxes      = np.append(boxes, box, axis=0)
+                box[0, 4] = a['category_id']
+                boxes = np.append(boxes, box, axis=0)
 
             # transform from [x, y, w, h] to [x1, y1, x2, y2]
             boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
@@ -248,44 +234,60 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
             # scale the ground truth boxes to the selected image scale
             boxes[:, :4] *= image_scale
             valid_boxes.append(boxes.shape[0])
+            boxes_batch[b, 0:boxes.shape[0], :] = boxes
 
-            # convert to batches
-            if not initialised:
-                image_batch = np.zeros((batch_size, image.shape[0], image.shape[1], image.shape[2]), dtype=np.float32)
-                initialised = True
-            image_batch[batch_index] = image.astype(keras.backend.floatx())
-            boxes_batch[batch_index, 0:boxes.shape[0], :] = boxes
+        image_batch = np.ndarray(shape=(batch_size, max_height, max_width, 3), dtype=keras.backend.floatx())
+
+        for index in range(0,batch_size):
+            image = temp_image_storage[index].astype(keras.backend.floatx())
+            # pad image
+            top_padding = 0
+            left_padding = 0
+            right_padding = max_width - image.shape[1]
+            bottom_padding = max_height - image.shape[0]
+            image = cv2.copyMakeBorder(image, top_padding, bottom_padding, left_padding, right_padding,
+                                       cv2.BORDER_CONSTANT, 0)
+
+            # add image to batch
+            image_batch[index] = image
+
+        # convert to batches (currently only batch_size = 1 is allowed)
+        #image_batch = np.expand_dims(image.astype(keras.backend.floatx()), axis=0)
+        #boxes_batch = np.expand_dims(boxes, axis=0)
 
         # randomly transform images and boxes simultaneously
         image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
-        initialised = False
-        for batch_index in range(0,batch_size):
-            image = temp_image_storage[batch_index]
+
+        for index in range(0,batch_size):
+            image = image_batch[index]
             # generate the label and regression targets
-            labels, regression_targets = anchor_targets(image, boxes_batch[batch_index],valid_boxes=valid_boxes[batch_index])
+            labels, regression_targets = anchor_targets(image, boxes_batch[index],valid_boxes=valid_boxes[index])
             regression_targets         = np.append(regression_targets, labels, axis=1)
 
-            if not initialised:
-                regression_batch = np.ndarray(shape=(batch_size,regression_targets.shape[0],regression_targets.shape[1]),dtype=np.float32)
-                labels_batch = np.ndarray(shape=(batch_size,labels.shape[0], labels.shape[1]),dtype=np.float32)
-                initialised = True
+            if index == 0:
+                regression_batch = np.ndarray(
+                    shape=(batch_size, regression_targets.shape[0], regression_targets.shape[1]),
+                    dtype=keras.backend.floatx())
+                labels_batch = np.ndarray(shape=(batch_size, labels.shape[0], labels.shape[1]),
+                                          dtype=keras.backend.floatx())
 
             # convert target to batch (currently only batch_size = 1 is allowed)
-            regression_batch[batch_index] = regression_targets
-            labels_batch[batch_index] = labels
+            regression_batch[index] = regression_targets
+            labels_batch[index]     = labels
+
 
         # convert the image to zero-mean
         image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
         image_batch = self.image_data_generator.standardize(image_batch)
 
         return {
-            'image'            : image,
-            'image_scale'      : image_scale,
-            'coco_index'       : coco_image['id'],
-            'boxes_batch'      : boxes_batch,
-            'image_batch'      : image_batch,
-            'regression_batch' : regression_batch,
-            'labels_batch'     : labels_batch,
+            'image': image,
+            'image_scale': image_scale,
+            'coco_index': coco_image['id'],
+            'boxes_batch': boxes_batch,
+            'image_batch': image_batch,
+            'regression_batch': regression_batch,
+            'labels_batch': labels_batch,
         }
 
 
@@ -294,11 +296,6 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
         with self.lock:
             selection, _, batch_size = next(self.index_generator)
 
-
-        #assert(batch_size == 1), "Currently only batch_size=1 is allowed."
-        #assert(len(selection) == 1), "Currently only batch_size=1 is allowed."
-
-        #image_data = self.load_image(selection[0])
         image_data = self.load_images(selection)
 
         if image_data is None:

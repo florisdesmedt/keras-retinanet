@@ -24,6 +24,7 @@ import tensorflow as tf
 
 from keras_retinanet.models import ResNet50RetinaNet
 from keras_retinanet.preprocessing import CocoIterator
+from keras_retinanet.preprocessing import CocoIteratorBatch
 import keras_retinanet
 
 
@@ -43,13 +44,14 @@ def parse_args():
     parser.add_argument('coco_path', help='Path to COCO directory (ie. /tmp/COCO).')
     parser.add_argument('--weights', help='Weights to use for initialization (defaults to ImageNet).', default='imagenet')
     parser.add_argument('--gpu', help='Id of the GPU to use (as reported by nvidia-smi).')
+    parser.add_argument('--batch', help='batch size during training.', default=1)
 
     return parser.parse_args()
 
 if __name__ == '__main__':
     # parse arguments
     args = parse_args()
-
+    batch_size = int(args.batch)
     # optionally choose specific GPU
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -81,11 +83,19 @@ if __name__ == '__main__':
     )
 
     # create a generator for training data
-    train_generator = CocoIterator(
-        args.coco_path,
-        'train2017',
-        train_image_data_generator,
-    )
+    if batch_size == 1:
+        train_generator = CocoIterator(
+            args.coco_path,
+            'train2017',
+            train_image_data_generator,
+        )
+    else:
+        train_generator = CocoIteratorBatch(
+            args.coco_path,
+            'train2017',
+            train_image_data_generator,
+            batch_size=batch_size
+        )
 
     # create a generator for testing data
     test_generator = CocoIterator(
@@ -95,7 +105,6 @@ if __name__ == '__main__':
     )
 
     # start training
-    batch_size = 1
     model.fit_generator(
         generator=train_generator,
         steps_per_epoch=len(train_generator.image_ids) // batch_size,
