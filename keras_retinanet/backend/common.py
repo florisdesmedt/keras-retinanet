@@ -21,8 +21,8 @@ import numpy as np
 
 
 def bbox_transform_inv(boxes, deltas):
-    shape_boxes = boxes.shape
-
+    shape_boxes = keras.backend.int_shape(boxes)
+    print(shape_boxes)
     boxes  = keras.backend.reshape(boxes, (-1, 4))
     deltas = keras.backend.reshape(deltas, (-1, 4))
 
@@ -47,9 +47,10 @@ def bbox_transform_inv(boxes, deltas):
     pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
 
     pred_boxes = keras.backend.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], axis=1)
-
-    pred_boxes = keras.backend.reshape(pred_boxes,shape_boxes)
-
+    if shape_boxes[0]:
+        pred_boxes = keras.backend.reshape(pred_boxes,(shape_boxes[0],-1,4))
+    else:
+        pred_boxes = keras.backend.expand_dims(pred_boxes, axis=0)
     # TODO fds: batch??
     #pred_boxes = keras.backend.expand_dims(pred_boxes, axis=0)
 

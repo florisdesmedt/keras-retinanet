@@ -256,7 +256,7 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
         batch_size = len(image_indeces)
 
         # TODO fds: is this some value defined somewhere?
-        max_annotations = 50
+        max_annotations = 300
         # set ground truth boxes
         boxes_batch = np.zeros((batch_size, max_annotations, 5), dtype=keras.backend.floatx())
 

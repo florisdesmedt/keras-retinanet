@@ -165,7 +165,7 @@ class TestNonMaximumSuppression(object):
     #@pytest.mark.xfail
     def test_mini_batch(self):
         # create simple NonMaximumSuppression layer
-        non_maximum_suppression_layer = keras_retinanet.layers.NonMaximumSuppression()
+        non_maximum_suppression_layer = keras_retinanet.layers.NonMaximumSuppression(initialized=True)
 
         # create simple input
         boxes = np.array([

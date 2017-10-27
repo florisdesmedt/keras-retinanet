@@ -138,43 +138,68 @@ class TensorReshape(keras.layers.Layer):
 
 
 class NonMaximumSuppression(keras.layers.Layer):
-    def __init__(self, nms_threshold=0.4, max_boxes=300, *args, **kwargs):
+    def __init__(self, nms_threshold=0.4, max_boxes=300, initialized = False, *args, **kwargs):
         self.nms_threshold = nms_threshold
         self.max_boxes     = max_boxes
+        self.initialized = initialized
         super(NonMaximumSuppression, self).__init__(*args, **kwargs)
+
 
     def call(self, inputs, **kwargs):
         boxes, classification, detections = inputs
-        shape_detections = keras.backend.int_shape(detections)
-        batch_size = keras.backend.int_shape(boxes)[0]
+        if self.initialized:
+            shape_detections = keras.backend.int_shape(detections)
+            batch_size = keras.backend.int_shape(boxes)[0]
 
-        # To allow batchsize > 1, we allocate memory to put all detections in, unexisting detections will be set to
-        # all -1
-        detections_batch = np.ones(shape=(batch_size,self.max_boxes,shape_detections[2]))*-1
+            # To allow batchsize > 1, we allocate memory to put all detections in, unexisting detections will be set to
+            # all -1
+            detections_batch = np.ones(shape=(batch_size,self.max_boxes,shape_detections[2]))*-1
 
-        for i in range(0,batch_size):
-            _boxes          = boxes[i]
+            for i in range(0,batch_size):
+                _boxes          = boxes[i]
+                _classification = classification[i]
+                _detections     = detections[i]
+
+                scores  = keras.backend.max(_classification, axis=1)
+
+                labels  = keras.backend.argmax(_classification, axis=1)
+                indices = keras_retinanet.backend.where(keras.backend.greater(labels, 0))[:, 0]
+
+                _boxes          = keras.backend.gather(_boxes, indices)
+                scores         = keras.backend.gather(scores, indices)
+                _classification = keras.backend.gather(_classification, indices)
+                _detections     = keras.backend.gather(_detections, indices)
+
+                indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
+
+                _detections = keras.backend.gather(_detections, indices)
+
+                # TODO: is there a keras backend function to use instead??
+                detections_batch[i,0:] = keras.backend.eval(_detections)
+
+            detections_batch = keras.backend.variable(detections_batch)
+        else:
+            i = 0
+            _boxes = boxes[i]
             _classification = classification[i]
-            _detections     = detections[i]
+            _detections = detections[i]
 
-            scores  = keras.backend.max(_classification, axis=1)
+            scores = keras.backend.max(_classification, axis=1)
 
-            labels  = keras.backend.argmax(_classification, axis=1)
+            labels = keras.backend.argmax(_classification, axis=1)
             indices = keras_retinanet.backend.where(keras.backend.greater(labels, 0))[:, 0]
 
-            _boxes          = keras.backend.gather(_boxes, indices)
-            scores         = keras.backend.gather(scores, indices)
+            _boxes = keras.backend.gather(_boxes, indices)
+            scores = keras.backend.gather(scores, indices)
             _classification = keras.backend.gather(_classification, indices)
-            _detections     = keras.backend.gather(_detections, indices)
-
-            indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
-
             _detections = keras.backend.gather(_detections, indices)
 
-            # TODO: is there a keras backend function to use instead??
-            detections_batch[i,0:] = keras.backend.eval(_detections)
+            indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes,
+                                                                  iou_threshold=self.nms_threshold)
 
-        detections_batch = keras.backend.variable(detections_batch)
+            _detections = keras.backend.gather(_detections, indices)
+            detections_batch = keras.backend.expand_dims(_detections, axis=0)
+            self.initialized = True
         return detections_batch
 
     def compute_output_shape(self, input_shape):
