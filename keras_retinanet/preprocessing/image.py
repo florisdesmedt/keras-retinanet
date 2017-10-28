@@ -1,7 +1,44 @@
+"""
+Copyright 2017-2018 Fizyr (https://fizyr.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 from __future__ import division
+import keras
 import time
 import numpy as np
 import cv2
+
+
+def preprocess_input(x):
+    # mostly identical to "https://github.com/fchollet/keras/blob/master/keras/applications/imagenet_utils.py"
+    # except for converting RGB -> BGR since we assume BGR already
+    if keras.backend.image_data_format() == 'channels_first':
+        if x.ndim == 3:
+            x[0, :, :] -= 103.939
+            x[1, :, :] -= 116.779
+            x[2, :, :] -= 123.68
+        else:
+            x[:, 0, :, :] -= 103.939
+            x[:, 1, :, :] -= 116.779
+            x[:, 2, :, :] -= 123.68
+    else:
+        x[..., 0] -= 103.939
+        x[..., 1] -= 116.779
+        x[..., 2] -= 123.68
+
+    return x
 
 
 def random_transform_batch(

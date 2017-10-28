@@ -1,3 +1,19 @@
+"""
+Copyright 2017-2018 Fizyr (https://fizyr.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 import keras
 import keras_retinanet
 
@@ -8,7 +24,7 @@ def default_classification_model(
     num_classes,
     num_anchors,
     pyramid_feature_size=256,
-    prior_probability=0.1,
+    prior_probability=0.01,
     classification_feature_size=256,
     name='classification_submodel'
 ):
@@ -33,14 +49,14 @@ def default_classification_model(
     outputs = keras.layers.Conv2D(
         filters=num_classes * num_anchors,
         kernel_initializer=keras.initializers.zeros(),
-        bias_initializer=keras_retinanet.initializers.PriorProbability(num_classes=num_classes, probability=prior_probability),
+        bias_initializer=keras_retinanet.initializers.PriorProbability(probability=prior_probability),
         name='pyramid_classification',
         **options
     )(outputs)
 
-    # reshape output and apply softmax
+    # reshape output and apply sigmoid
     outputs = keras_retinanet.layers.TensorReshape((-1, num_classes), name='pyramid_classification_reshape')(outputs)
-    outputs = keras.layers.Activation('softmax', name='pyramid_classification_softmax')(outputs)
+    outputs = keras.layers.Activation('sigmoid', name='pyramid_classification_sigmoid')(outputs)
 
     return keras.models.Model(inputs=inputs, outputs=outputs, name=name)
 
@@ -135,10 +151,10 @@ def __build_anchors(anchor_parameters, features):
     anchors = []
     for i, f in enumerate(features):
         anchors.append(keras_retinanet.layers.Anchors(
-            anchor_size=anchor_parameters.sizes[i],
-            anchor_stride=anchor_parameters.strides[i],
-            anchor_ratios=anchor_parameters.ratios,
-            anchor_scales=anchor_parameters.scales,
+            size=anchor_parameters.sizes[i],
+            stride=anchor_parameters.strides[i],
+            ratios=anchor_parameters.ratios,
+            scales=anchor_parameters.scales,
             name='anchors_{}'.format(i)
         )(f))
     return keras.layers.Concatenate(axis=1)(anchors)
@@ -185,7 +201,7 @@ def retinanet_bbox(inputs, num_classes, nms=True, name='retinanet-bbox', *args, 
 
     # additionally apply non maximum suppression
     if nms:
-        detections = keras_retinanet.layers.NonMaximumSuppression(num_classes=num_classes, name='nms')([boxes, classification, detections])
+        detections = keras_retinanet.layers.NonMaximumSuppression(name='nms')([boxes, classification, detections])
 
     # construct the model
     return keras.models.Model(inputs=inputs, outputs=[regression, classification, detections], name=name)

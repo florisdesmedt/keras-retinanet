@@ -1,3 +1,19 @@
+"""
+Copyright 2017-2018 Fizyr (https://fizyr.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 from __future__ import division
 
 import keras.applications.imagenet_utils
@@ -5,7 +21,7 @@ import keras.preprocessing.image
 import keras.backend
 from .anchors import anchors_for_image, anchor_targets
 
-from .image import random_transform_batch, resize_image
+import keras_retinanet
 
 import cv2
 import xml.etree.ElementTree as ET
@@ -15,27 +31,26 @@ import numpy as np
 import time
 
 voc_classes = {
-    '__background__' : 0,
-    'aeroplane'      : 1,
-    'bicycle'        : 2,
-    'bird'           : 3,
-    'boat'           : 4,
-    'bottle'         : 5,
-    'bus'            : 6,
-    'car'            : 7,
-    'cat'            : 8,
-    'chair'          : 9,
-    'cow'            : 10,
-    'diningtable'    : 11,
-    'dog'            : 12,
-    'horse'          : 13,
-    'motorbike'      : 14,
-    'person'         : 15,
-    'pottedplant'    : 16,
-    'sheep'          : 17,
-    'sofa'           : 18,
-    'train'          : 19,
-    'tvmonitor'      : 20
+    'aeroplane'      : 0,
+    'bicycle'        : 1,
+    'bird'           : 2,
+    'boat'           : 3,
+    'bottle'         : 4,
+    'bus'            : 5,
+    'car'            : 6,
+    'cat'            : 7,
+    'chair'          : 8,
+    'cow'            : 9,
+    'diningtable'    : 10,
+    'dog'            : 11,
+    'horse'          : 12,
+    'motorbike'      : 13,
+    'person'         : 14,
+    'pottedplant'    : 15,
+    'sheep'          : 16,
+    'sofa'           : 17,
+    'train'          : 18,
+    'tvmonitor'      : 19
 }
 
 
@@ -110,48 +125,59 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
 
         return boxes
 
+    def load_image(self, image_index):
+        path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
+        image = cv2.imread(path, cv2.IMREAD_COLOR)
+        image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+        # set ground truth boxes
+        boxes_batch = np.zeros((1, 0, 5), dtype=keras.backend.floatx())
+        boxes       = np.expand_dims(self.parse_annotations(self.image_names[image_index]), axis=0)
+        boxes_batch = np.append(boxes_batch, boxes, axis=1)
+
+        # scale the ground truth boxes to the selected image scale
+        boxes_batch[0, :, :4] *= image_scale
+
+        # convert to batches (currently only batch_size = 1 is allowed)
+        image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
+
+        # randomly transform images and boxes simultaneously
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+
+        # generate the label and regression targets
+        labels, regression_targets = anchor_targets(image, boxes_batch[0])
+        regression_targets         = np.append(regression_targets, labels, axis=1)
+
+        # convert target to batch (currently only batch_size = 1 is allowed)
+        regression_batch = np.expand_dims(regression_targets, axis=0)
+        labels_batch     = np.expand_dims(labels, axis=0)
+        l
+
+        # convert the image to zero-mean
+        image_batch = keras_retinanet.preprocessing.image.preprocess_input(image_batch)
+        image_batch = self.image_data_generator.standardize(image_batch)
+
+        return {
+            'image'            : image,
+            'image_scale'      : image_scale,
+            'boxes_batch'      : boxes_batch,
+            'image_batch'      : image_batch,
+            'regression_batch' : regression_batch,
+            'labels_batch'     : labels_batch,
+        }
+
     def next(self):
         # lock indexing to prevent race conditions
         with self.lock:
             selection, _, batch_size = next(self.index_generator)
 
         assert(batch_size == 1), "Currently only batch_size=1 is allowed."
+        assert(len(selection) == 1), "Currently only batch_size=1 is allowed."
 
         # transformation of images is not under thread lock so it can be done in parallel
-        boxes_batch = np.zeros((batch_size, 0, 5), dtype=keras.backend.floatx())
+        image_data = self.load_image(selection[0])
 
-        for batch_index, image_index in enumerate(selection):
-            path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
-            image = cv2.imread(path, cv2.IMREAD_COLOR)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
-
-            # set ground truth boxes
-            boxes = np.expand_dims(self.parse_annotations(self.image_names[image_index]), axis=0)
-            boxes_batch = np.append(boxes_batch, boxes, axis=1)
-
-            # scale the ground truth boxes to the selected image scale
-            boxes_batch[batch_index, :, :4] *= image_scale
-
-            # convert to batches (currently only batch_size = 1 is allowed)
-            image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
-
-            # randomly transform images and boxes simultaneously
-            image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
-
-            # generate the label and regression targets
-            labels, regression_targets = anchor_targets(image, boxes_batch[0])
-            regression_targets         = np.append(regression_targets, np.expand_dims(labels, axis=1), axis=1)
-
-            # convert target to batch (currently only batch_size = 1 is allowed)
-            regression_batch = np.expand_dims(regression_targets, axis=0)
-            labels_batch     = np.expand_dims(labels, axis=0)
-            labels_batch     = np.expand_dims(labels_batch, axis=2)
-
-        # convert the image to zero-mean
-        image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
-        image_batch = self.image_data_generator.standardize(image_batch)
-
-        return image_batch, [regression_batch, labels_batch]
+        return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
 
 class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
     def     __init__(
@@ -229,7 +255,7 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
         batch_size = len(image_indeces)
 
         # TODO fds: is this some value defined somewhere?
-        max_annotations = 50
+        max_annotations = 300
         # set ground truth boxes
         boxes_batch = np.zeros((batch_size, max_annotations, 5), dtype=keras.backend.floatx())
 
@@ -242,7 +268,9 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             b = image_indeces[index]
             path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[b] + self.image_extension)
             image = cv2.imread(path, cv2.IMREAD_COLOR)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+            image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side,
+                                                                                  max_side=self.image_max_side)
             # add the image to the temp list (required to find largest dimentions in batch for padding)
             temp_image_container.append(image)
             max_width = max(max_width, image.shape[1])
@@ -270,7 +298,8 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             image_batch[index] = image
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch,
+                                                                                              self.image_data_generator)
 
         for index in range(0,batch_size):
             image = image_batch[index]
@@ -311,3 +340,4 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
         image_data = self.load_image(selection)
 
         return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
+

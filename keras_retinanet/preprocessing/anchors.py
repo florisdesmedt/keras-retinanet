@@ -1,12 +1,27 @@
+"""
+Copyright 2017-2018 Fizyr (https://fizyr.com)
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+"""
+
 import numpy as np
 
-
-def anchor_targets(image, gt_boxes, negative_overlap=0.4, positive_overlap=0.5,valid_boxes = 0, **kwargs):
+def anchor_targets(image, gt_boxes, num_classes, negative_overlap=0.4, positive_overlap=0.5,valid_boxes = 0, **kwargs):
     # first create the anchors for this image
     anchors = anchors_for_image(image, **kwargs)
 
     # label: 1 is positive, 0 is negative, -1 is dont care
-    labels = np.ones((anchors.shape[0],1)) * -1
+    labels = np.ones((anchors.shape[0], num_classes)) * -1
 
     # obtain indices of gt boxes with the greatest overlap
     if valid_boxes == 0:
@@ -17,18 +32,17 @@ def anchor_targets(image, gt_boxes, negative_overlap=0.4, positive_overlap=0.5,v
     max_overlaps         = overlaps[np.arange(overlaps.shape[0]), argmax_overlaps_inds]
 
     # assign bg labels first so that positive labels can clobber them
-    labels[max_overlaps < negative_overlap, 0] = 0
+    labels[max_overlaps < negative_overlap, :] = 0
 
-    # fg label: above threshold IOU
-    labels[max_overlaps >= positive_overlap, 0] = 1
 
     # compute box regression targets
     gt_boxes = gt_boxes[argmax_overlaps_inds]
     bbox_reg_targets = bbox_transform(anchors, gt_boxes)
 
-    # select correct label from gt_boxes
-
-    labels[labels[:, 0] == 1, 0] = gt_boxes[labels[:, 0] == 1, 4]
+    # fg label: above threshold IOU
+    positive_indices = max_overlaps >= positive_overlap
+    labels[positive_indices, :] = 0
+    labels[positive_indices, gt_boxes[positive_indices, 4].astype(int)] = 1
 
     return labels, bbox_reg_targets
 
