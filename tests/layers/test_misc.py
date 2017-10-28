@@ -52,6 +52,7 @@ class TestAnchors(object):
         np.testing.assert_array_equal(anchors, expected)
 
     # mark test to fail
+
     #@pytest.mark.xfail
     def test_mini_batch(self):
         # create simple Anchors layer
@@ -157,8 +158,6 @@ class TestNonMaximumSuppression(object):
             [4, 5, 6],
         ]], dtype=keras.backend.floatx())
 
-        print("After NMS {}".format(actual))
-
         np.testing.assert_array_equal(actual[:,0], expected[:,0])
 
     # mark test to fail
@@ -216,6 +215,7 @@ class TestNonMaximumSuppression(object):
                 [7, 8, 9],
             ],
         ], dtype=keras.backend.floatx())
+
 
         np.testing.assert_array_equal(actual[:, 0], expected[:, 0])
         #np.testing.assert_array_equal(actual, expected)

@@ -138,39 +138,39 @@ class TensorReshape(keras.layers.Layer):
 
 
 class NonMaximumSuppression(keras.layers.Layer):
-    def __init__(self, nms_threshold=0.4, max_boxes=300, initialized = False, *args, **kwargs):
+
+    def __init__(self, nms_threshold=0.4, top_k=1000, max_boxes=300,initialized = False, *args, **kwargs):
         self.nms_threshold = nms_threshold
+        self.top_k         = top_k
         self.max_boxes     = max_boxes
         self.initialized = initialized
         super(NonMaximumSuppression, self).__init__(*args, **kwargs)
 
-
     def call(self, inputs, **kwargs):
         boxes, classification, detections = inputs
+
         if self.initialized:
             shape_detections = keras.backend.int_shape(detections)
             batch_size = keras.backend.int_shape(boxes)[0]
 
             # To allow batchsize > 1, we allocate memory to put all detections in, unexisting detections will be set to
             # all -1
-            detections_batch = np.ones(shape=(batch_size,self.max_boxes,shape_detections[2]))*-1
+            detections_batch = np.ones(shape=(batch_size, self.max_boxes, shape_detections[2])) * -1
 
             for i in range(0,batch_size):
                 _boxes          = boxes[i]
                 _classification = classification[i]
                 _detections     = detections[i]
 
-                scores  = keras.backend.max(_classification, axis=1)
+                scores = keras.backend.max(_classification, axis=1)
+                scores, indices = keras_retinanet.backend.top_k(scores, self.top_k, sorted=False)
 
-                labels  = keras.backend.argmax(_classification, axis=1)
-                indices = keras_retinanet.backend.where(keras.backend.greater(labels, 0))[:, 0]
-
-                _boxes          = keras.backend.gather(_boxes, indices)
-                scores         = keras.backend.gather(scores, indices)
+                _boxes = keras.backend.gather(_boxes, indices)
                 _classification = keras.backend.gather(_classification, indices)
-                _detections     = keras.backend.gather(_detections, indices)
+                _detections = keras.backend.gather(_detections, indices)
 
-                indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
+                indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes,
+                                                                      iou_threshold=self.nms_threshold)
 
                 _detections = keras.backend.gather(_detections, indices)
 
@@ -178,29 +178,26 @@ class NonMaximumSuppression(keras.layers.Layer):
                 detections_batch[i,0:] = keras.backend.eval(_detections)
 
             detections_batch = keras.backend.variable(detections_batch)
+            self.initialized = True
+            return detections_batch
         else:
-            i = 0
-            _boxes = boxes[i]
-            _classification = classification[i]
-            _detections = detections[i]
+            # TODO: support batch size > 1.
+            boxes = boxes[0]
+            classification = classification[0]
+            detections = detections[0]
 
-            scores = keras.backend.max(_classification, axis=1)
+            scores = keras.backend.max(classification, axis=1)
+            scores, indices = keras_retinanet.backend.top_k(scores, self.top_k, sorted=False)
 
-            labels = keras.backend.argmax(_classification, axis=1)
-            indices = keras_retinanet.backend.where(keras.backend.greater(labels, 0))[:, 0]
+            boxes = keras.backend.gather(boxes, indices)
+            classification = keras.backend.gather(classification, indices)
+            detections = keras.backend.gather(detections, indices)
 
-            _boxes = keras.backend.gather(_boxes, indices)
-            scores = keras.backend.gather(scores, indices)
-            _classification = keras.backend.gather(_classification, indices)
-            _detections = keras.backend.gather(_detections, indices)
-
-            indices = keras_retinanet.backend.non_max_suppression(_boxes, scores, max_output_size=self.max_boxes,
+            indices = keras_retinanet.backend.non_max_suppression(boxes, scores, max_output_size=self.max_boxes,
                                                                   iou_threshold=self.nms_threshold)
 
-            _detections = keras.backend.gather(_detections, indices)
-            detections_batch = keras.backend.expand_dims(_detections, axis=0)
-            self.initialized = True
-        return detections_batch
+            detections = keras.backend.gather(detections, indices)
+            return keras.backend.expand_dims(detections, axis=0)
 
     def compute_output_shape(self, input_shape):
         return (input_shape[2][0], None, input_shape[2][2])
@@ -208,6 +205,7 @@ class NonMaximumSuppression(keras.layers.Layer):
     def get_config(self):
         return {
             'nms_threshold' : self.nms_threshold,
+            'top_k'         : self.top_k,
             'max_boxes'     : self.max_boxes,
         }
 

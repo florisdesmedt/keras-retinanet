@@ -16,35 +16,37 @@ limitations under the License.
 
 import numpy as np
 
+def anchor_targets(image, gt_boxes, num_classes, negative_overlap=0.4, positive_overlap=0.5,valid_boxes = 0, **kwargs):
 
-def anchor_targets(image, gt_boxes, negative_overlap=0.4, positive_overlap=0.5, valid_boxes = 0, **kwargs):
     # first create the anchors for this image
     anchors = anchors_for_image(image, **kwargs)
 
     # label: 1 is positive, 0 is negative, -1 is dont care
-    labels = np.ones((anchors.shape[0],1)) * -1
+
+    labels = np.ones((anchors.shape[0], num_classes)) * -1
 
     # obtain indices of gt boxes with the greatest overlap
     if valid_boxes == 0:
-        overlaps             = compute_overlap(anchors, gt_boxes[:, :4])
+        overlaps = compute_overlap(anchors, gt_boxes[:, :4])
+
     else:
         overlaps = compute_overlap(anchors, gt_boxes[0:valid_boxes, :4])
     argmax_overlaps_inds = np.argmax(overlaps, axis=1)
     max_overlaps         = overlaps[np.arange(overlaps.shape[0]), argmax_overlaps_inds]
 
     # assign bg labels first so that positive labels can clobber them
-    labels[max_overlaps < negative_overlap,0] = 0
 
-    # fg label: above threshold IOU
-    labels[max_overlaps >= positive_overlap,0] = 1
+    labels[max_overlaps < negative_overlap, :] = 0
 
     # compute box regression targets
-    gt_boxes         = gt_boxes[argmax_overlaps_inds]
+    gt_boxes = gt_boxes[argmax_overlaps_inds]
     bbox_reg_targets = bbox_transform(anchors, gt_boxes)
 
-    # select correct label from gt_boxes
 
-    labels[labels[:,0] == 1,0] = gt_boxes[labels[:,0] == 1, 4]
+    # fg label: above threshold IOU
+    positive_indices = max_overlaps >= positive_overlap
+    labels[positive_indices, :] = 0
+    labels[positive_indices, gt_boxes[positive_indices, 4].astype(int)] = 1
 
     return labels, bbox_reg_targets
 

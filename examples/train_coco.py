@@ -36,7 +36,7 @@ def get_session():
 
 def create_model(weights='imagenet'):
     image = keras.layers.Input((None, None, 3))
-    return ResNet50RetinaNet(image, num_classes=91, weights=weights)
+    return ResNet50RetinaNet(image, num_classes=90, weights=weights)
 
 
 def parse_args():
@@ -75,12 +75,9 @@ if __name__ == '__main__':
 
     # create image data generator objects
     train_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
-        rescale=1.0 / 255.0,
         horizontal_flip=True,
     )
-    test_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
-        rescale=1.0 / 255.0,
-    )
+    test_image_data_generator = keras.preprocessing.image.ImageDataGenerator()
 
     # create a generator for training data
     if batch_size == 1:

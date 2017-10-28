@@ -21,7 +21,7 @@ import keras.preprocessing.image
 import keras.backend
 from .anchors import anchors_for_image, anchor_targets
 
-from .image import random_transform_batch, resize_image
+import keras_retinanet
 
 import cv2
 import xml.etree.ElementTree as ET
@@ -31,27 +31,26 @@ import numpy as np
 import time
 
 voc_classes = {
-    '__background__' : 0,
-    'aeroplane'      : 1,
-    'bicycle'        : 2,
-    'bird'           : 3,
-    'boat'           : 4,
-    'bottle'         : 5,
-    'bus'            : 6,
-    'car'            : 7,
-    'cat'            : 8,
-    'chair'          : 9,
-    'cow'            : 10,
-    'diningtable'    : 11,
-    'dog'            : 12,
-    'horse'          : 13,
-    'motorbike'      : 14,
-    'person'         : 15,
-    'pottedplant'    : 16,
-    'sheep'          : 17,
-    'sofa'           : 18,
-    'train'          : 19,
-    'tvmonitor'      : 20
+    'aeroplane'      : 0,
+    'bicycle'        : 1,
+    'bird'           : 2,
+    'boat'           : 3,
+    'bottle'         : 4,
+    'bus'            : 5,
+    'car'            : 6,
+    'cat'            : 7,
+    'chair'          : 8,
+    'cow'            : 9,
+    'diningtable'    : 10,
+    'dog'            : 11,
+    'horse'          : 12,
+    'motorbike'      : 13,
+    'person'         : 14,
+    'pottedplant'    : 15,
+    'sheep'          : 16,
+    'sofa'           : 17,
+    'train'          : 18,
+    'tvmonitor'      : 19
 }
 
 
@@ -129,7 +128,7 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
     def load_image(self, image_index):
         path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[image_index] + self.image_extension)
         image = cv2.imread(path, cv2.IMREAD_COLOR)
-        image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+        image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
 
         # set ground truth boxes
         boxes_batch = np.zeros((1, 0, 5), dtype=keras.backend.floatx())
@@ -143,7 +142,7 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
         image_batch = np.expand_dims(image, axis=0).astype(keras.backend.floatx())
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
         # generate the label and regression targets
         labels, regression_targets = anchor_targets(image, boxes_batch[0])
@@ -154,7 +153,7 @@ class PascalVocIterator(keras.preprocessing.image.Iterator):
         labels_batch     = np.expand_dims(labels, axis=0)
 
         # convert the image to zero-mean
-        image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
+        image_batch = keras_retinanet.preprocessing.image.preprocess_input(image_batch)
         image_batch = self.image_data_generator.standardize(image_batch)
 
         return {
@@ -269,7 +268,9 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             b = image_indeces[index]
             path  = os.path.join(self.data_dir, 'JPEGImages', self.image_names[b] + self.image_extension)
             image = cv2.imread(path, cv2.IMREAD_COLOR)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+            image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side,
+                                                                                  max_side=self.image_max_side)
             # add the image to the temp list (required to find largest dimentions in batch for padding)
             temp_image_container.append(image)
             max_width = max(max_width, image.shape[1])
@@ -297,7 +298,9 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
             image_batch[index] = image
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch,
+                                                                                              self.image_data_generator)
 
         for index in range(0,batch_size):
             image = image_batch[index]
@@ -338,3 +341,4 @@ class PascalVocIteratorBatch(keras.preprocessing.image.Iterator):
         image_data = self.load_image(selection)
 
         return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
+

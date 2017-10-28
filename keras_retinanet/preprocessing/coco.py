@@ -20,7 +20,7 @@ import keras.applications.imagenet_utils
 import keras.preprocessing.image
 import keras.backend
 
-from .image import random_transform_batch, resize_image
+import keras_retinanet
 
 import cv2
 
@@ -39,6 +39,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         data_dir,
         set_name,
         image_data_generator,
+        num_classes=90,
         image_min_side=600,
         image_max_side=1024,
         batch_size=1,
@@ -52,6 +53,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         self.image_data_generator = image_data_generator
         self.image_min_side       = image_min_side
         self.image_max_side       = image_max_side
+        self.num_classes          = num_classes
 
         if seed is None:
             seed = np.uint32(time.time() * 1000)
@@ -65,9 +67,9 @@ class CocoIterator(keras.preprocessing.image.Iterator):
     def load_classes(self):
         # load class names (name -> label)
         categories = self.coco.loadCats(self.coco.getCatIds())
-        self.classes = {'__background__': 0}
+        self.classes = {}
         for c in categories:
-            self.classes[c['name']] = c['id']
+            self.classes[c['name']] = c['id'] - 1 # start from 0
 
         # also load the reverse (label -> name)
         self.labels = {}
@@ -78,7 +80,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         coco_image         = self.coco.loadImgs(self.image_ids[image_index])[0]
         path               = os.path.join(self.data_dir, 'images', self.set_name, coco_image['file_name'])
         image              = cv2.imread(path, cv2.IMREAD_COLOR)
-        image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+        image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
 
         # set ground truth boxes
         annotations_ids = self.coco.getAnnIds(imgIds=coco_image['id'], iscrowd=False)
@@ -93,7 +95,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         for idx, a in enumerate(annotations):
             box        = np.zeros((1, 5), dtype=keras.backend.floatx())
             box[0, :4] = a['bbox']
-            box[0, 4]  = a['category_id']
+            box[0, 4]  = a['category_id'] - 1 # start from 0
             boxes      = np.append(boxes, box, axis=0)
 
         # transform from [x, y, w, h] to [x1, y1, x2, y2]
@@ -108,19 +110,19 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         boxes_batch   = np.expand_dims(boxes, axis=0)
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
         # generate the label and regression targets
-        labels, regression_targets = anchor_targets(image, boxes_batch[0])
+
+        labels, regression_targets = anchor_targets(image, boxes_batch[0], self.num_classes)
         regression_targets         = np.append(regression_targets, labels, axis=1)
 
         # convert target to batch (currently only batch_size = 1 is allowed)
         regression_batch = np.expand_dims(regression_targets, axis=0)
         labels_batch     = np.expand_dims(labels, axis=0)
 
-
         # convert the image to zero-mean
-        image_batch = keras.applications.imagenet_utils.preprocess_input(image_batch)
+        image_batch = keras_retinanet.preprocessing.image.preprocess_input(image_batch)
         image_batch = self.image_data_generator.standardize(image_batch)
 
         return {
@@ -156,6 +158,7 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
         data_dir,
         set_name,
         image_data_generator,
+        num_classes=90,
         image_min_side=600,
         image_max_side=1024,
         batch_size=1,
@@ -169,6 +172,7 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
         self.image_data_generator = image_data_generator
         self.image_min_side       = image_min_side
         self.image_max_side       = image_max_side
+        self.num_classes          = num_classes
 
         if seed is None:
             seed = np.uint32(time.time() * 1000)
@@ -206,7 +210,8 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
             coco_image = self.coco.loadImgs(self.image_ids[b])[0]
             path = os.path.join(self.data_dir, 'images', self.set_name, coco_image['file_name'])
             image = cv2.imread(path, cv2.IMREAD_COLOR)
-            image, image_scale = resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+            image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side,
+                                                                                  max_side=self.image_max_side)
             temp_image_storage.append(image)
             max_width = max(max_width, image.shape[1])
             max_height = max(max_height, image.shape[0])
@@ -256,12 +261,13 @@ class CocoIteratorBatch(keras.preprocessing.image.Iterator):
         #boxes_batch = np.expand_dims(boxes, axis=0)
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
         for index in range(0,batch_size):
             image = image_batch[index]
             # generate the label and regression targets
-            labels, regression_targets = anchor_targets(image, boxes_batch[index],valid_boxes=valid_boxes[index])
+            labels, regression_targets = anchor_targets(image, boxes_batch[index],self.num_classes,
+                                                        valid_boxes=valid_boxes[index])
             regression_targets         = np.append(regression_targets, labels, axis=1)
 
             if index == 0:
