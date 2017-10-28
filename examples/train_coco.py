@@ -89,6 +89,12 @@ if __name__ == '__main__':
             'train2017',
             train_image_data_generator,
         )
+        # create a generator for testing data
+        test_generator = CocoIterator(
+            args.coco_path,
+            'val2017',
+            test_image_data_generator,
+        )
     else:
         train_generator = CocoIteratorBatch(
             args.coco_path,
@@ -96,13 +102,15 @@ if __name__ == '__main__':
             train_image_data_generator,
             batch_size=batch_size
         )
+        # create a generator for testing data
+        test_generator = CocoIteratorBatch(
+            args.coco_path,
+            'val2017',
+            test_image_data_generator,
+            batch_size=batch_size
+        )
 
-    # create a generator for testing data
-    test_generator = CocoIterator(
-        args.coco_path,
-        'val2017',
-        test_image_data_generator,
-    )
+
 
     # start training
     model.fit_generator(

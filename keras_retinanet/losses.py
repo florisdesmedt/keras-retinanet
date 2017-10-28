@@ -21,6 +21,9 @@ import keras_retinanet
 def focal_loss(alpha=0.25, gamma=2.0):
     def _focal_loss(y_true, y_pred):
 
+        print("Predictions: {}".format(keras.backend.int_shape(y_pred)))
+        print("GT: {}".format(keras.backend.int_shape(y_true)))
+
         labels         = y_true[:, :, 0]
         classification = y_pred[:, :, :]
 
