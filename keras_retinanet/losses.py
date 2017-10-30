@@ -52,6 +52,7 @@ def regression_loss(y_true, y_pred):
     labels            = y_true[0, :, 4:]
 
     anchor_state      = keras.backend.max(labels, axis=1) # -1 for ignore, 0 for background, 1 for object
+
     indices           = keras_retinanet.backend.where(keras.backend.equal(anchor_state, 1))
     regression        = keras_retinanet.backend.gather_nd(regression, indices)
     regression_target = keras_retinanet.backend.gather_nd(regression_target, indices)

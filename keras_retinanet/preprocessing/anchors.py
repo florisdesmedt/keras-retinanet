@@ -17,7 +17,7 @@ limitations under the License.
 import numpy as np
 
 
-def anchor_targets(image, gt_boxes, num_classes, negative_overlap=0.4, positive_overlap=0.5, **kwargs):
+def anchor_targets(image, gt_boxes, num_classes, negative_overlap=0.4, positive_overlap=0.5, valid_boxes = 0, **kwargs):
     # first create the anchors for this image
     anchors = anchors_for_image(image, **kwargs)
 
@@ -25,7 +25,11 @@ def anchor_targets(image, gt_boxes, num_classes, negative_overlap=0.4, positive_
     labels = np.ones((anchors.shape[0], num_classes)) * -1
 
     # obtain indices of gt boxes with the greatest overlap
-    overlaps             = compute_overlap(anchors, gt_boxes[:, :4])
+    if valid_boxes == 0:
+        overlaps             = compute_overlap(anchors, gt_boxes[:, :4])
+    else:
+        overlaps = compute_overlap(anchors, gt_boxes[:valid_boxes, :4])
+
     argmax_overlaps_inds = np.argmax(overlaps, axis=1)
     max_overlaps         = overlaps[np.arange(overlaps.shape[0]), argmax_overlaps_inds]
 

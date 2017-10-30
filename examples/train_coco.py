@@ -51,6 +51,9 @@ if __name__ == '__main__':
     args = parse_args()
 
     batch_size = 1
+    epoch_scaling = 700
+
+    test_batchsize = 1
 
     # optionally choose specific GPU
     if args.gpu:
@@ -75,38 +78,41 @@ if __name__ == '__main__':
 
     # create image data generator objects
     train_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
-        horizontal_flip=True,
+        #rescale=1/255.0,
+       # horizontal_flip=True,
     )
-    test_image_data_generator = keras.preprocessing.image.ImageDataGenerator()
+    test_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
+        #rescale=1 / 255.0,
+    )
 
     # create a generator for training data
     train_generator = CocoIterator(
-        seed=1,
+
         args.coco_path,
         'train2017',
         train_image_data_generator,
+        seed=1,
+        batch_size=batch_size
     )
 
     # create a generator for testing data
     test_generator = CocoIterator(
-        seed=1,
         args.coco_path,
         'val2017',
         test_image_data_generator,
+        seed=1,
+        batch_size=test_batchsize,
     )
 
-    epoch_scaling = 700
-
     # start training
-
     model.fit_generator(
         generator=train_generator,
-        steps_per_epoch=len(train_generator.image_ids) // batch_size // epoch_scaling,
+        steps_per_epoch=len(train_generator.image_ids) // batch_size // (epoch_scaling//batch_size),
         epochs=20,
         verbose=1,
         max_queue_size=20,
         validation_data=test_generator,
-        validation_steps=len(test_generator.image_ids) // batch_size // epoch_scaling,
+        validation_steps=len(test_generator.image_ids) // test_batchsize // epoch_scaling,
         callbacks=[
             keras.callbacks.ModelCheckpoint('snapshots/resnet50_coco_best.h5', monitor='val_loss', verbose=1, save_best_only=True),
             keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),

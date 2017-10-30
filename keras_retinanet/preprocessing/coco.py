@@ -60,7 +60,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
 
         self.load_classes()
 
-        assert(batch_size == 1), "Currently only batch_size=1 is allowed."
+        #assert(batch_size == 1), "Currently only batch_size=1 is allowed."
 
         super(CocoIterator, self).__init__(len(self.image_ids), batch_size, shuffle, seed)
 
@@ -76,60 +76,107 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         for key, value in self.classes.items():
             self.labels[value] = key
 
-    def load_image(self, image_index):
-        coco_image         = self.coco.loadImgs(self.image_ids[image_index])[0]
-        path               = os.path.join(self.data_dir, self.set_name, coco_image['file_name'])
-        #path               = os.path.join(self.data_dir, 'images', self.set_name, coco_image['file_name'])
-        #print("path to file is {}".format(path))
-        image              = cv2.imread(path, cv2.IMREAD_COLOR)
-        image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+    def load_image(self, image_indeces):
 
-        # set ground truth boxes
-        annotations_ids = self.coco.getAnnIds(imgIds=coco_image['id'], iscrowd=False)
+        batch_size = len(image_indeces)
 
-        # some images appear to miss annotations (like image with id 257034)
-        if len(annotations_ids) == 0:
-            return None
+        temp_image_storage = []
+        temp_boxes_storage = []
 
-        # parse annotations
-        annotations = self.coco.loadAnns(annotations_ids)
-        boxes       = np.zeros((0, 5), dtype=keras.backend.floatx())
-        for idx, a in enumerate(annotations):
-            box        = np.zeros((1, 5), dtype=keras.backend.floatx())
-            box[0, :4] = a['bbox']
-            box[0, 4]  = a['category_id'] - 1 # start from 0
-            boxes      = np.append(boxes, box, axis=0)
+        max_image_width = 0
+        max_image_height = 0
 
-        # transform from [x, y, w, h] to [x1, y1, x2, y2]
-        boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
-        boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
+        max_boxes = 0
+        valid_boxes = []
+        for image_index in image_indeces:
+            coco_image         = self.coco.loadImgs(self.image_ids[image_index])[0]
+            path               = os.path.join(self.data_dir, self.set_name, coco_image['file_name'])
 
-        # scale the ground truth boxes to the selected image scale
-        boxes[:, :4] *= image_scale
+            image              = cv2.imread(path, cv2.IMREAD_COLOR)
+            image, image_scale = keras_retinanet.preprocessing.image.resize_image(image, min_side=self.image_min_side, max_side=self.image_max_side)
+
+            # set ground truth boxes
+            annotations_ids = self.coco.getAnnIds(imgIds=coco_image['id'], iscrowd=False)
+
+            # some images appear to miss annotations (like image with id 257034)
+            if len(annotations_ids) == 0:
+                return None
+
+            # parse annotations
+            annotations = self.coco.loadAnns(annotations_ids)
+            boxes       = np.zeros((0, 5), dtype=keras.backend.floatx())
+            for idx, a in enumerate(annotations):
+                box        = np.zeros((1, 5), dtype=keras.backend.floatx())
+                box[0, :4] = a['bbox']
+                box[0, 4]  = a['category_id'] - 1 # start from 0
+                boxes      = np.append(boxes, box, axis=0)
+
+            # transform from [x, y, w, h] to [x1, y1, x2, y2]
+            boxes[:, 2] = boxes[:, 0] + boxes[:, 2]
+            boxes[:, 3] = boxes[:, 1] + boxes[:, 3]
+
+            # scale the ground truth boxes to the selected image scale
+            boxes[:, :4] *= image_scale
+            temp_image_storage.append(image)
+            temp_boxes_storage.append(boxes)
+            max_image_width = max(max_image_width, image.shape[1])
+            max_image_height = max(max_image_height, image.shape[0])
+            max_boxes = max(max_boxes, boxes.shape[0])
+            valid_boxes.append(boxes.shape[0])
+
 
         # convert to batches (currently only batch_size = 1 is allowed)
-        image_batch   = np.expand_dims(image.astype(keras.backend.floatx()), axis=0)
-        boxes_batch   = np.expand_dims(boxes, axis=0)
+        #image_batch   = np.expand_dims(image.astype(keras.backend.floatx()), axis=0)
+        image_batch   = np.zeros(shape=(batch_size,max_image_height,max_image_width,3),dtype=keras.backend.floatx())
+        boxes_batch   = np.ones(shape=(batch_size,max_boxes,temp_boxes_storage[0].shape[1])) * -1
+
+
+        # pad the images
+        for i in range(0,batch_size):
+            # pad image
+            top_padding = 0
+            left_padding = 0
+            right_padding = max_image_width - temp_image_storage[i].shape[1]
+            bottom_padding = max_image_height - temp_image_storage[i].shape[0]
+            image_batch[i] = cv2.copyMakeBorder(temp_image_storage[i], top_padding, bottom_padding, left_padding, right_padding,
+                                       cv2.BORDER_CONSTANT, 0)
+            boxes_batch[i][:temp_boxes_storage[i].shape[0]] = temp_boxes_storage[i]
+
+
+        # print("Boxes: {}".format(boxes_batch))
 
         # randomly transform images and boxes simultaneously
-        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        #image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
-        # generate the label and regression targets
-        labels, regression_targets = anchor_targets(image, boxes_batch[0], self.num_classes)
-        regression_targets         = np.append(regression_targets, labels, axis=1)
 
-        # convert target to batch (currently only batch_size = 1 is allowed)
-        regression_batch = np.expand_dims(regression_targets, axis=0)
-        labels_batch     = np.expand_dims(labels, axis=0)
+        for i in range(0,batch_size):
+            # generate the label and regression targets
+            labels, regression_targets = anchor_targets(image_batch[i], boxes_batch[i], self.num_classes, valid_boxes=valid_boxes[i])
+            regression_targets = np.append(regression_targets, labels, axis=1)
+
+            if i == 0:
+                regression_batch = np.ndarray(shape=(batch_size,regression_targets.shape[0],regression_targets.shape[1]), dtype=keras.backend.floatx())
+                labels_batch = np.ndarray(shape=(batch_size,labels.shape[0], labels.shape[1]))
+
+            # convert target to batch (currently only batch_size = 1 is allowed)
+            regression_batch[i] = regression_targets
+            labels_batch[i]     = labels
 
         # convert the image to zero-mean
         image_batch = keras_retinanet.preprocessing.image.preprocess_input(image_batch)
         image_batch = self.image_data_generator.standardize(image_batch)
 
+        # for i in range(0,batch_size):
+        #     print("Size of regression: {}".format(regression_batch[i].shape[0]))
+        #     print("boxes {} {}".format(i,regression_batch[i]))
+        #     cv2.imshow("Image " + str(i), image_batch[i]/255.0)
+        #
+        # cv2.waitKey(0)
+
         return {
-            'image'            : image,
-            'image_scale'      : image_scale,
-            'coco_index'       : coco_image['id'],
+       #     'image'            : image,
+       #     'image_scale'      : image_scale,
+       #     'coco_index'       : coco_image['id'],
             'boxes_batch'      : boxes_batch,
             'image_batch'      : image_batch,
             'regression_batch' : regression_batch,
@@ -142,10 +189,10 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         with self.lock:
             selection, _, batch_size = next(self.index_generator)
 
-        assert(batch_size == 1), "Currently only batch_size=1 is allowed."
-        assert(len(selection) == 1), "Currently only batch_size=1 is allowed."
+        #assert(batch_size == 1), "Currently only batch_size=1 is allowed."
+        #assert(len(selection) == 1), "Currently only batch_size=1 is allowed."
 
-        image_data = self.load_image(selection[0])
+        image_data = self.load_image(selection)
 
         if image_data is None:
             return self.next()

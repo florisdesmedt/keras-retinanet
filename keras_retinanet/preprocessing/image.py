@@ -51,7 +51,7 @@ def random_transform_batch(
         seed = np.uint32(time.time() * 1000)
 
     for batch in range(image_batch.shape[0]):
-        image_batch[batch] = image_data_generator.random_transform(image_batch[0], seed=seed)
+        image_batch[batch] = image_data_generator.random_transform(image_batch[batch], seed=seed)
 
         # set fill mode so that masks are not enlarged
         fill_mode = image_data_generator.fill_mode
