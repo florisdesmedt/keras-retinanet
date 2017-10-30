@@ -50,6 +50,8 @@ if __name__ == '__main__':
     # parse arguments
     args = parse_args()
 
+    batch_size = 1
+
     # optionally choose specific GPU
     if args.gpu:
         os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
@@ -79,6 +81,7 @@ if __name__ == '__main__':
 
     # create a generator for training data
     train_generator = CocoIterator(
+        seed=1,
         args.coco_path,
         'train2017',
         train_image_data_generator,
@@ -86,21 +89,24 @@ if __name__ == '__main__':
 
     # create a generator for testing data
     test_generator = CocoIterator(
+        seed=1,
         args.coco_path,
         'val2017',
         test_image_data_generator,
     )
 
+    epoch_scaling = 700
+
     # start training
-    batch_size = 1
+
     model.fit_generator(
         generator=train_generator,
-        steps_per_epoch=len(train_generator.image_ids) // batch_size,
+        steps_per_epoch=len(train_generator.image_ids) // batch_size // epoch_scaling,
         epochs=20,
         verbose=1,
         max_queue_size=20,
         validation_data=test_generator,
-        validation_steps=len(test_generator.image_ids) // batch_size,
+        validation_steps=len(test_generator.image_ids) // batch_size // epoch_scaling,
         callbacks=[
             keras.callbacks.ModelCheckpoint('snapshots/resnet50_coco_best.h5', monitor='val_loss', verbose=1, save_best_only=True),
             keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
