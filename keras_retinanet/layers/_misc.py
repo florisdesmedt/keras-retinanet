@@ -21,11 +21,12 @@ import numpy as np
 
 
 class Anchors(keras.layers.Layer):
-    def __init__(self, size, stride, ratios=None, scales=None, *args, **kwargs):
+    def __init__(self, size, stride, ratios=None, scales=None,initialized=False, *args, **kwargs):
         self.size   = size
         self.stride = stride
         self.ratios = ratios
         self.scales = scales
+        self.initialized = initialized
 
         if ratios is None:
             self.ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
@@ -44,7 +45,10 @@ class Anchors(keras.layers.Layer):
     def call(self, inputs, **kwargs):
         features = inputs
         features_shape = keras.backend.shape(features)[1:3]
-        batch_size = keras.backend.int_shape(features)[0]
+
+        #batch_size = keras.backend.int_shape(features)[0]
+        batch_size = 6
+
         # generate proposals from bbox deltas and shifted anchors
         anchors = keras_retinanet.backend.shift(features_shape, self.stride, self.anchors)
 
@@ -149,15 +153,21 @@ class NonMaximumSuppression(keras.layers.Layer):
     def call(self, inputs, **kwargs):
         boxes, classification, detections = inputs
 
-        if self.initialized:
+        if True:
+        #if self.initialized:
             shape_detections = keras.backend.int_shape(detections)
-            batch_size = keras.backend.int_shape(boxes)[0]
+
+            #batch_size = keras.backend.int_shape(boxes)[0]
+            batch_size = 6
 
             # To allow batchsize > 1, we allocate memory to put all detections in, unexisting detections will be set to
             # all -1
             detections_batch = np.ones(shape=(batch_size, self.max_boxes, shape_detections[2])) * -1
 
-            for i in range(0,batch_size):
+            if not self.initialized:
+                return keras.backend.variable(detections_batch)
+
+            for i in range(0, batch_size):
                 _boxes          = boxes[i]
                 _classification = classification[i]
                 _detections     = detections[i]
