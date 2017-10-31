@@ -22,6 +22,9 @@ import keras.preprocessing.image
 
 import tensorflow as tf
 
+import sys
+sys.path.append("/projects/keras-retinanet")
+
 from keras_retinanet.models import ResNet50RetinaNet
 from keras_retinanet.preprocessing import CocoIterator
 import keras_retinanet
