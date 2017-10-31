@@ -20,32 +20,60 @@ import keras_retinanet.backend
 import numpy as np
 
 
-def bbox_transform_inv(boxes, deltas):
-    boxes  = keras.backend.reshape(boxes, (-1, 4))
-    deltas = keras.backend.reshape(deltas, (-1, 4))
+def bbox_transform_inv(boxes, deltas, batch_size = 1):
+    shape_boxes = keras.backend.int_shape(boxes)
 
-    widths  = boxes[:, 2] - boxes[:, 0]
-    heights = boxes[:, 3] - boxes[:, 1]
-    ctr_x   = boxes[:, 0] + 0.5 * widths
-    ctr_y   = boxes[:, 1] + 0.5 * heights
 
-    dx = deltas[:, 0]
-    dy = deltas[:, 1]
-    dw = deltas[:, 2]
-    dh = deltas[:, 3]
+    if not shape_boxes[0]:
+        return keras.backend.variable(np.zeros(shape=(batch_size,0,4)))
 
-    pred_ctr_x = ctr_x + dx * widths
-    pred_ctr_y = ctr_y + dy * heights
-    pred_w     = keras.backend.exp(dw) * widths
-    pred_h     = keras.backend.exp(dh) * heights
+    max_boxes = 0
+    P_boxes = []
+    num_boxes = []
 
-    pred_boxes_x1 = pred_ctr_x - 0.5 * pred_w
-    pred_boxes_y1 = pred_ctr_y - 0.5 * pred_h
-    pred_boxes_x2 = pred_ctr_x + 0.5 * pred_w
-    pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
+    for i in range(0, batch_size):
 
-    pred_boxes = keras.backend.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], axis=1)
-    pred_boxes = keras.backend.expand_dims(pred_boxes, axis=0)
+        _boxes = keras.backend.reshape(boxes[i], (-1, 4))
+        _deltas = keras.backend.reshape(deltas[i], (-1, 4))
+
+        widths = _boxes[:, 2] - _boxes[:, 0]
+        heights = _boxes[:, 3] - _boxes[:, 1]
+        ctr_x = _boxes[:, 0] + 0.5 * widths
+        ctr_y = _boxes[:, 1] + 0.5 * heights
+
+        dx = _deltas[:, 0]
+        dy = _deltas[:, 1]
+        dw = _deltas[:, 2]
+        dh = _deltas[:, 3]
+
+        pred_ctr_x = ctr_x + dx * widths
+        pred_ctr_y = ctr_y + dy * heights
+        pred_w = keras.backend.exp(dw) * widths
+        pred_h = keras.backend.exp(dh) * heights
+
+        pred_boxes_x1 = pred_ctr_x - 0.5 * pred_w
+        pred_boxes_y1 = pred_ctr_y - 0.5 * pred_h
+        pred_boxes_x2 = pred_ctr_x + 0.5 * pred_w
+        pred_boxes_y2 = pred_ctr_y + 0.5 * pred_h
+
+        pred_boxes = keras.backend.stack([pred_boxes_x1, pred_boxes_y1, pred_boxes_x2, pred_boxes_y2], axis=1)
+
+
+        P_boxes.append(pred_boxes)
+        max_boxes = max(max_boxes, keras.backend.int_shape(pred_boxes)[0])
+        num_boxes.append(keras.backend.int_shape(pred_boxes)[0])
+
+
+    p_batch = np.zeros(shape=(batch_size,max_boxes,4))
+
+    for i in range(0, batch_size):
+        p_batch[i][:num_boxes[i]] = keras.backend.eval(P_boxes[i])
+
+    return keras.backend.variable(p_batch)
+
+
+    # TODO fds: batch??
+    # pred_boxes = keras.backend.expand_dims(pred_boxes, axis=0)
 
     return pred_boxes
 

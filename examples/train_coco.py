@@ -50,10 +50,10 @@ if __name__ == '__main__':
     # parse arguments
     args = parse_args()
 
-    batch_size = 1
-    epoch_scaling = 700
+    batch_size = 3
+    epoch_scaling = 170
 
-    test_batchsize = 1
+    test_batchsize = 3
 
     # optionally choose specific GPU
     if args.gpu:
@@ -79,7 +79,7 @@ if __name__ == '__main__':
     # create image data generator objects
     train_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
         #rescale=1/255.0,
-       # horizontal_flip=True,
+        horizontal_flip=True,
     )
     test_image_data_generator = keras.preprocessing.image.ImageDataGenerator(
         #rescale=1 / 255.0,
@@ -108,7 +108,7 @@ if __name__ == '__main__':
     model.fit_generator(
         generator=train_generator,
         steps_per_epoch=len(train_generator.image_ids) // batch_size // (epoch_scaling//batch_size),
-        epochs=20,
+        epochs=20 * 25,
         verbose=1,
         max_queue_size=20,
         validation_data=test_generator,

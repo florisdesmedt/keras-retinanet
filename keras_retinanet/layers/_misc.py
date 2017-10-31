@@ -27,6 +27,8 @@ class Anchors(keras.layers.Layer):
         self.ratios = ratios
         self.scales = scales
 
+        self.batch_size = 3
+
         if ratios is None:
             self.ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
         if scales is None:
@@ -48,6 +50,9 @@ class Anchors(keras.layers.Layer):
         # generate proposals from bbox deltas and shifted anchors
         anchors = keras_retinanet.backend.shift(features_shape, self.stride, self.anchors)
         anchors = keras.backend.expand_dims(anchors, axis=0)
+
+        if not keras.backend.int_shape(features)[0]:
+            anchors = keras.backend.repeat_elements(anchors, self.batch_size, axis=0)
 
         return anchors
 
@@ -137,27 +142,60 @@ class NonMaximumSuppression(keras.layers.Layer):
         self.nms_threshold = nms_threshold
         self.top_k         = top_k
         self.max_boxes     = max_boxes
+        self.batch_size = 3
+        self.initialized = False
+
         super(NonMaximumSuppression, self).__init__(*args, **kwargs)
 
     def call(self, inputs, **kwargs):
         boxes, classification, detections = inputs
 
-        # TODO: support batch size > 1.
-        boxes          = boxes[0]
-        classification = classification[0]
-        detections     = detections[0]
 
-        scores          = keras.backend.max(classification, axis=1)
-        scores, indices = keras_retinanet.backend.top_k(scores, self.top_k, sorted=False)
+        if self.initialized:
+            shape_detections = keras.backend.int_shape(detections)
+            detections_batch = np.ones(shape=(self.batch_size, self.max_boxes, shape_detections[2])) * -1
 
-        boxes          = keras.backend.gather(boxes, indices)
-        classification = keras.backend.gather(classification, indices)
-        detections     = keras.backend.gather(detections, indices)
+            for i in range(0,self.batch_size):
+                _boxes = boxes[i]
+                _classification = classification[i]
+                _detections = detections[i]
 
-        indices = keras_retinanet.backend.non_max_suppression(boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
+                _scores = keras.backend.max(_classification, axis=1)
+                _scores, _indices = keras_retinanet.backend.top_k(_scores, self.top_k, sorted=False)
 
-        detections = keras.backend.gather(detections, indices)
-        return keras.backend.expand_dims(detections, axis=0)
+                _boxes = keras.backend.gather(_boxes, _indices)
+                _classification = keras.backend.gather(_classification, _indices)
+                _detections = keras.backend.gather(_detections, _indices)
+
+                _indices = keras_retinanet.backend.non_max_suppression(_boxes, _scores, max_output_size=self.max_boxes,
+                                                                      iou_threshold=self.nms_threshold)
+
+                D = keras.backend.eval(keras.backend.gather(_detections, _indices))
+                num_d = keras.backend.int_shape(D)
+                detections_batch[i][:num_d] = D
+                detections_batch = keras.backend.variable(detections_batch)
+
+        else:
+            boxes          = boxes[0]
+            classification = classification[0]
+            detections     = detections[0]
+
+            scores          = keras.backend.max(classification, axis=1)
+            scores, indices = keras_retinanet.backend.top_k(scores, self.top_k, sorted=False)
+
+            boxes          = keras.backend.gather(boxes, indices)
+            classification = keras.backend.gather(classification, indices)
+            detections     = keras.backend.gather(detections, indices)
+
+            indices = keras_retinanet.backend.non_max_suppression(boxes, scores, max_output_size=self.max_boxes, iou_threshold=self.nms_threshold)
+
+            detections_batch = keras.backend.gather(detections, indices)
+            self.initialized = True
+            detections_batch = keras.backend.expand_dims(detections_batch, axis=0)
+            if self.batch_size > 1:
+                detections_batch = keras.backend.repeat_elements(detections_batch, self.batch_size, axis=0)
+
+        return detections_batch
 
     def compute_output_shape(self, input_shape):
         return (input_shape[2][0], None, input_shape[2][2])
@@ -183,7 +221,7 @@ class UpsampleLike(keras.layers.Layer):
 class RegressBoxes(keras.layers.Layer):
     def call(self, inputs, **kwargs):
         anchors, regression = inputs
-        return keras_retinanet.backend.bbox_transform_inv(anchors, regression)
+        return keras_retinanet.backend.bbox_transform_inv(anchors, regression,batch_size=3)
 
     def compute_output_shape(self, input_shape):
         return input_shape[0]
