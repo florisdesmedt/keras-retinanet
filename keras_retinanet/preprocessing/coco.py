@@ -146,7 +146,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
         # print("Boxes: {}".format(boxes_batch))
 
         # randomly transform images and boxes simultaneously
-        #image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
+        image_batch, boxes_batch = keras_retinanet.preprocessing.image.random_transform_batch(image_batch, boxes_batch, self.image_data_generator)
 
 
         for i in range(0,batch_size):
