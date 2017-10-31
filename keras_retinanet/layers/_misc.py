@@ -21,13 +21,13 @@ import numpy as np
 
 
 class Anchors(keras.layers.Layer):
-    def __init__(self, size, stride, ratios=None, scales=None, *args, **kwargs):
+    def __init__(self, size, stride, ratios=None, scales=None,batch_size=1, *args, **kwargs):
         self.size   = size
         self.stride = stride
         self.ratios = ratios
         self.scales = scales
 
-        self.batch_size = 3
+        self.batch_size = batch_size
 
         if ratios is None:
             self.ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
@@ -138,11 +138,11 @@ class TensorReshape(keras.layers.Layer):
 
 
 class NonMaximumSuppression(keras.layers.Layer):
-    def __init__(self, nms_threshold=0.4, top_k=1000, max_boxes=300, *args, **kwargs):
+    def __init__(self, nms_threshold=0.4, top_k=1000, max_boxes=300,batch_size=1, *args, **kwargs):
         self.nms_threshold = nms_threshold
         self.top_k         = top_k
         self.max_boxes     = max_boxes
-        self.batch_size = 3
+        self.batch_size = batch_size
         self.initialized = False
 
         super(NonMaximumSuppression, self).__init__(*args, **kwargs)
@@ -219,9 +219,13 @@ class UpsampleLike(keras.layers.Layer):
 
 
 class RegressBoxes(keras.layers.Layer):
+    def __init__(self, batch_size=1,*args, **kwargs):
+        self.batch_size = batch_size
+        super(RegressBoxes, self).__init__(*args, **kwargs)
+
     def call(self, inputs, **kwargs):
         anchors, regression = inputs
-        return keras_retinanet.backend.bbox_transform_inv(anchors, regression,batch_size=3)
+        return keras_retinanet.backend.bbox_transform_inv(anchors, regression,batch_size=self.batch_size)
 
     def compute_output_shape(self, input_shape):
         return input_shape[0]

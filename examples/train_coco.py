@@ -33,9 +33,9 @@ def get_session():
     return tf.Session(config=config)
 
 
-def create_model(weights='imagenet'):
+def create_model(weights='imagenet', batch_size=1):
     image = keras.layers.Input((None, None, 3))
-    return ResNet50RetinaNet(image, num_classes=90, weights=weights)
+    return ResNet50RetinaNet(image, num_classes=90, weights=weights,batch_size=batch_size)
 
 
 def parse_args():
@@ -43,6 +43,8 @@ def parse_args():
     parser.add_argument('coco_path', help='Path to COCO directory (ie. /tmp/COCO).')
     parser.add_argument('--weights', help='Weights to use for initialization (defaults to ImageNet).', default='imagenet')
     parser.add_argument('--gpu', help='Id of the GPU to use (as reported by nvidia-smi).')
+    parser.add_argument('--batchsize', help='Batch size', default=1)
+    parser.add_argument('--epochscale', help='divide the epoch to increase amount of validation points', default=1)
 
     return parser.parse_args()
 
@@ -50,10 +52,10 @@ if __name__ == '__main__':
     # parse arguments
     args = parse_args()
 
-    batch_size = 3
-    epoch_scaling = 170
+    batch_size = int(args.batchsize)
+    epoch_scaling = int(args.epochscale)
 
-    test_batchsize = 3
+    test_batchsize = batch_size
 
     # optionally choose specific GPU
     if args.gpu:
@@ -62,13 +64,13 @@ if __name__ == '__main__':
 
     # create the model
     print('Creating model, this may take a second...')
-    model = create_model(weights=args.weights)
+    model = create_model(weights=args.weights, batch_size=batch_size)
 
     # compile model (note: set loss to None since loss is added inside layer)
     model.compile(
         loss={
-            'regression'    : keras_retinanet.losses.regression_loss,
-            'classification': keras_retinanet.losses.focal_loss()
+            'regression'    : keras_retinanet.losses.regression_loss(batch_size=batch_size),
+            'classification': keras_retinanet.losses.focal_loss(batch_size=batch_size)
         },
         optimizer=keras.optimizers.adam(lr=1e-5, clipnorm=0.001)
     )
@@ -107,12 +109,12 @@ if __name__ == '__main__':
     # start training
     model.fit_generator(
         generator=train_generator,
-        steps_per_epoch=len(train_generator.image_ids) // batch_size // (epoch_scaling//batch_size),
-        epochs=20 * 25,
+        steps_per_epoch=len(train_generator.image_ids) // batch_size // epoch_scaling,
+        epochs=20 * epoch_scaling,
         verbose=1,
         max_queue_size=20,
         validation_data=test_generator,
-        validation_steps=len(test_generator.image_ids) // test_batchsize // epoch_scaling,
+        validation_steps=len(test_generator.image_ids) // test_batchsize,
         callbacks=[
             keras.callbacks.ModelCheckpoint('snapshots/resnet50_coco_best.h5', monitor='val_loss', verbose=1, save_best_only=True),
             keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.1, patience=2, verbose=1, mode='auto', epsilon=0.0001, cooldown=0, min_lr=0),
