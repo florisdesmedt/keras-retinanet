@@ -21,13 +21,12 @@ import numpy as np
 
 
 class Anchors(keras.layers.Layer):
-    def __init__(self, size, stride, ratios=None, scales=None,batch_size=1, *args, **kwargs):
+    def __init__(self, size, stride, ratios=None, scales=None, *args, **kwargs):
         self.size   = size
         self.stride = stride
         self.ratios = ratios
         self.scales = scales
 
-        self.batch_size = batch_size
 
         if ratios is None:
             self.ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
@@ -50,9 +49,6 @@ class Anchors(keras.layers.Layer):
         # generate proposals from bbox deltas and shifted anchors
         anchors = keras_retinanet.backend.shift(features_shape, self.stride, self.anchors)
         anchors = keras.backend.expand_dims(anchors, axis=0)
-
-        if not keras.backend.int_shape(features)[0]:
-            anchors = keras.backend.repeat_elements(anchors, self.batch_size, axis=0)
 
         return anchors
 

@@ -27,7 +27,7 @@ sys.path.append("/projects/keras-retinanet")
 
 import cv2
 
-from keras_retinanet.models.resnet import OnlyResNet
+from keras_retinanet.models.resnet import OnlyResNet, OnlyResNetPyramid, OnlyResNetSubmodels, OnlyResNetPyramidFeatures, OnlyResNetAnchors
 #from keras_retinanet.preprocessing import CocoIterator
 #import keras_retinanet
 #from keras_retinanet import losses
@@ -70,39 +70,105 @@ def create_input():
     image = keras.layers.Input((None, None, 3))
     return image
 
-def test_input():
+def create_batch(image_path_list):
+    images_list = []
+    max_width = 0
+    max_height = 0
+    for f in image_path_list:
+        I = cv2.imread(f)
+        max_width = max(max_width, I.shape[1])
+        max_height = max(max_height, I.shape[0])
+        images_list.append(I)
+    # pad images
+    for index,I in enumerate(images_list):
+        I = pad_image(I, (max_height, max_width))
+        images_list[index] = np.expand_dims(I,axis=0)
+
+
+    return np.concatenate(images_list,axis=0)
+
+def create_mod_resnet():
     model = create_input()
-    I = cv2.imread("Datasets/COCO/train2017/000000291597.jpg")
-    I2 = cv2.imread("Datasets/COCO/val2017/000000212226.jpg")
-
-    I = pad_image(I,(max(I.shape[0],I2.shape[0]),max(I.shape[1],I2.shape[1])))
-    I2 = pad_image(I,(max(I.shape[0],I2.shape[0]),max(I.shape[1],I2.shape[1])))
-
-    I_ = np.expand_dims(I,axis=0)
-    I2_ = np.expand_dims(I2,axis=0)
-    I_ = np.concatenate([I_, I2_])
     output = OnlyResNet(model)
+    return output
 
-    G = output.predict(I_)
+def create_mod_pyramid():
+    model = create_input()
+    output = OnlyResNetPyramid(model)
+    return output
+
+def create_mod_anchors():
+    model = create_input()
+    output = OnlyResNetAnchors(model)
+    return output
+
+
+def create_mod_pyramidfeatures():
+    model = create_input()
+    output = OnlyResNetPyramidFeatures(model)
+    return output
+
+def create_temp_batch():
+    images = ["Datasets/COCO/train2017/000000291597.jpg", "Datasets/COCO/val2017/000000212226.jpg"]
+    #images = ["Datasets/COCO/train2017/000000291597.jpg"]
+    return create_batch(images)
+
+def test_input():
+    print("test the input resnet calculation")
+    output = create_mod_resnet()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
     print(G[0].shape)
     print(G[1].shape)
     print(G[2].shape)
     print(G[3].shape)
-    #cv2.imshow("Image", I)
-    #cv2.waitKey(0)
+
+
+def test_with_pyramidfeatures():
+    print("test the pyramid features")
+    output = create_mod_pyramidfeatures()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
+    for i in range(0,len(G)):
+        print(G[i].shape)
+
+def test_with_pyramid():
+    print("test the pyramid")
+    output = create_mod_pyramid()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
+    for i in range(0,len(G)):
+        print(G[i].shape)
+
+
+def test_with_anchors():
+    print("test the anchors")
+    output = create_mod_anchors()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
+    for i in range(0,len(G)):
+        print(G[i].shape)
+
+
+
+def test_submodels():
+    print("test the submodels")
+
+    G = OnlyResNetSubmodels()
+    print(G)
 
 if __name__ == '__main__':
-    # parse arguments
-    args = parse_args()
+    test_with_anchors()
 
-    batch_size = int(args.batchsize)
-    epoch_scaling = int(args.epochscale)
-
-    test_batchsize = batch_size
-
-    # optionally choose specific GPU
-    if args.gpu:
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu
-    keras.backend.tensorflow_backend.set_session(get_session())
-
-    test_input()
+    test_submodels()
+    #test_input()
+    test_with_pyramidfeatures()
+    test_with_pyramid()

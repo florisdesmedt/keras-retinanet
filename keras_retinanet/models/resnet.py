@@ -18,6 +18,11 @@ import keras
 import keras_resnet.models
 import keras_retinanet.models
 
+from keras_retinanet.models.retinanet import __create_pyramid_features as create_pyramid_features
+from keras_retinanet.models.retinanet import __build_pyramid
+from keras_retinanet.models.retinanet import default_submodels, AnchorParameters, __build_anchors
+import numpy as np
+
 WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 
@@ -55,3 +60,105 @@ def OnlyResNet(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
     resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
 
     return resnet
+
+
+def OnlyResNetSubmodels():
+
+    num_classes = 10
+    anchor_parameters = AnchorParameters(
+        sizes   = [32, 64, 128, 256, 512],
+        strides = [8, 16, 32, 64, 128],
+        ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
+        scales  = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)], keras.backend.floatx()),
+    )
+
+    submodels = default_submodels(num_classes, anchor_parameters)
+
+    return submodels
+
+
+def OnlyResNetPyramidFeatures(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    num_classes = 10
+    anchor_parameters = AnchorParameters(
+        sizes   = [32, 64, 128, 256, 512],
+        strides = [8, 16, 32, 64, 128],
+        ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
+        scales  = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)], keras.backend.floatx()),
+    )
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+    _, C3, C4, C5 = resnet.output  # we ignore C2
+    pyramid_features = create_pyramid_features(C3, C4, C5)
+
+    return keras.models.Model(inputs=inputs, outputs=pyramid_features)
+
+
+def OnlyResNetAnchors(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    num_classes = 10
+    anchor_parameters = AnchorParameters(
+        sizes   = [32, 64, 128, 256, 512],
+        strides = [8, 16, 32, 64, 128],
+        ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
+        scales  = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)], keras.backend.floatx()),
+    )
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+    _, C3, C4, C5 = resnet.output  # we ignore C2
+    pyramid_features = create_pyramid_features(C3, C4, C5)
+
+
+    anchors = __build_anchors(anchor_parameters, pyramid_features, batch_size=2)
+
+    return keras.models.Model(inputs=inputs, outputs=anchors)
+
+def OnlyResNetPyramid(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    num_classes = 10
+    anchor_parameters = AnchorParameters(
+        sizes   = [32, 64, 128, 256, 512],
+        strides = [8, 16, 32, 64, 128],
+        ratios  = np.array([0.5, 1, 2], keras.backend.floatx()),
+        scales  = np.array([2 ** 0, 2 ** (1.0 / 3.0), 2 ** (2.0 / 3.0)], keras.backend.floatx()),
+    )
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+    _, C3, C4, C5 = resnet.output  # we ignore C2
+    pyramid_features = create_pyramid_features(C3, C4, C5)
+
+    submodels = default_submodels(num_classes, anchor_parameters)
+
+    pyramid = __build_pyramid(submodels, pyramid_features)
+
+    return keras.models.Model(inputs=inputs, outputs=pyramid)
