@@ -38,3 +38,20 @@ def ResNet50RetinaNet(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
     model = keras_retinanet.models.retinanet_bbox(inputs=inputs, backbone=resnet,batch_size=batch_size, *args, **kwargs)
     model.load_weights(weights_path, by_name=True)
     return model
+
+
+def OnlyResNet(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+
+    return resnet
