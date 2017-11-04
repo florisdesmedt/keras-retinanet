@@ -20,7 +20,7 @@ import keras_retinanet.models
 
 from keras_retinanet.models.retinanet import __create_pyramid_features as create_pyramid_features
 from keras_retinanet.models.retinanet import __build_pyramid
-from keras_retinanet.models.retinanet import default_submodels, AnchorParameters, __build_anchors
+from keras_retinanet.models.retinanet import default_submodels, AnchorParameters, __build_anchors, retinanet
 import numpy as np
 
 WEIGHTS_PATH_NO_TOP = 'https://github.com/fchollet/deep-learning-models/releases/download/v0.2/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
@@ -42,6 +42,7 @@ def ResNet50RetinaNet(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
 
     model = keras_retinanet.models.retinanet_bbox(inputs=inputs, backbone=resnet,batch_size=batch_size, *args, **kwargs)
     model.load_weights(weights_path, by_name=True)
+
     return model
 
 
@@ -129,9 +130,46 @@ def OnlyResNetAnchors(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
     pyramid_features = create_pyramid_features(C3, C4, C5)
 
 
-    anchors = __build_anchors(anchor_parameters, pyramid_features, batch_size=2)
+    anchors = __build_anchors(anchor_parameters, pyramid_features)
 
     return keras.models.Model(inputs=inputs, outputs=anchors)
+
+def OnlyResNetRetina(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+
+    return retinanet(inputs=inputs, num_classes=10,batch_size=3,backbone=resnet, *args, **kwargs)
+
+def OnlyResNetRegression(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
+    image = inputs
+
+    # load pretrained imagenet weights?
+    if weights == 'imagenet':
+        weights_path = keras.applications.imagenet_utils.get_file(
+            'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5',
+            WEIGHTS_PATH_NO_TOP, cache_subdir='models', md5_hash='a268eb855778b3df3c7506639542a6af'
+        )
+    else:
+        weights_path = weights
+
+    resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+    retina = retinanet(inputs=inputs, num_classes=10,batch_size=3,backbone=resnet, *args, **kwargs)
+
+    predictions, anchors = retina.outputs
+    regression = keras.layers.Lambda(lambda x: x[:, :, :4], name='regression')(predictions)
+
+
+    return keras.models.Model(inputs=inputs, outputs=[regression])
 
 def OnlyResNetPyramid(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
     image = inputs

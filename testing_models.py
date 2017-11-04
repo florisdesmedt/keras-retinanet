@@ -25,9 +25,12 @@ import tensorflow as tf
 import sys
 sys.path.append("/projects/keras-retinanet")
 
+import keras_retinanet.layers
+
 import cv2
 
-from keras_retinanet.models.resnet import OnlyResNet, OnlyResNetPyramid, OnlyResNetSubmodels, OnlyResNetPyramidFeatures, OnlyResNetAnchors
+from keras_retinanet.models.resnet import OnlyResNet, OnlyResNetPyramid, OnlyResNetSubmodels, OnlyResNetPyramidFeatures, \
+    OnlyResNetAnchors, OnlyResNetRetina,ResNet50RetinaNet, OnlyResNetRegression
 #from keras_retinanet.preprocessing import CocoIterator
 #import keras_retinanet
 #from keras_retinanet import losses
@@ -39,6 +42,107 @@ def get_session():
     config = tf.ConfigProto()
     config.gpu_options.allow_growth = True
     return tf.Session(config=config)
+
+
+
+class TestNonMaximumSuppression(object):
+    def test_simple(self):
+        # create simple NonMaximumSuppression layer
+        non_maximum_suppression_layer = keras_retinanet.layers.NonMaximumSuppression(top_k=2)
+
+        # create simple input
+        boxes = np.array([[
+            [0, 0, 10, 10],
+            [0, 0, 10, 10],
+        ]], dtype=keras.backend.floatx())
+        boxes = keras.backend.variable(boxes)
+
+        classification = np.array([[
+            [0, 0.9],
+            [0, 1],
+        ]], dtype=keras.backend.floatx())
+        classification = keras.backend.variable(classification)
+
+        detections = np.array([[
+            [1, 2, 3],
+            [4, 5, 6],
+        ]], dtype=keras.backend.floatx())
+        detections = keras.backend.variable(detections)
+
+        # compute output
+        actual = non_maximum_suppression_layer.call([boxes, classification, detections])
+        actual = keras.backend.eval(actual)
+
+        expected = np.array([[
+            [4, 5, 6],
+        ]], dtype=keras.backend.floatx())
+
+        print("From the detections {} we keep {}".format(keras.backend.eval(detections),actual))
+
+        np.testing.assert_array_equal(actual, expected)
+
+    # mark test to fail
+    def test_mini_batch(self):
+        # create simple NonMaximumSuppression layer
+        non_maximum_suppression_layer = keras_retinanet.layers.NonMaximumSuppression(top_k=2)
+
+        # create simple input
+        boxes = np.array([
+            [
+                [0, 0, 10, 10],
+                [0, 0, 10, 10],
+            ],
+            [
+                [100, 100, 150, 150],
+                [100, 100, 150, 150],
+            ],
+        ], dtype=keras.backend.floatx())
+        boxes = keras.backend.variable(boxes)
+
+        classification = np.array([
+            [
+                [0, 0.9],
+                [0, 1],
+            ],
+            [
+                [0, 1],
+                [0, 0.9],
+            ],
+        ], dtype=keras.backend.floatx())
+        classification = keras.backend.variable(classification)
+
+        detections = np.array([
+            [
+                [1, 2, 3],
+                [4, 5, 6],
+            ],
+            [
+                [7, 8, 9],
+                [10, 11, 12],
+            ],
+        ], dtype=keras.backend.floatx())
+        detections = keras.backend.variable(detections)
+
+        # compute output
+        actual = non_maximum_suppression_layer.call([boxes, classification, detections])
+        actual = keras.backend.eval(actual)
+
+        expected = np.array([
+            [
+                [4, 5, 6],
+            ],
+            [
+                [7, 8, 9],
+            ],
+        ], dtype=keras.backend.floatx())
+
+        print("From the detections {} we keep {}".format(keras.backend.eval(detections), actual))
+
+        np.testing.assert_array_equal(actual, expected)
+
+
+
+
 
 
 def create_model(weights='imagenet', batch_size=1):
@@ -84,7 +188,6 @@ def create_batch(image_path_list):
         I = pad_image(I, (max_height, max_width))
         images_list[index] = np.expand_dims(I,axis=0)
 
-
     return np.concatenate(images_list,axis=0)
 
 def create_mod_resnet():
@@ -102,6 +205,22 @@ def create_mod_anchors():
     output = OnlyResNetAnchors(model)
     return output
 
+def create_mod_retinanet():
+    model = create_input()
+    output = OnlyResNetRetina(model)
+    return output
+
+
+def create_mod_regression():
+    model = create_input()
+    output = OnlyResNetRegression(model)
+    return output
+
+def create_mod_full():
+    model = create_input()
+    output = ResNet50RetinaNet(model,  num_classes=10,batch_size=3)
+    return output
+
 
 def create_mod_pyramidfeatures():
     model = create_input()
@@ -109,7 +228,7 @@ def create_mod_pyramidfeatures():
     return output
 
 def create_temp_batch():
-    images = ["Datasets/COCO/train2017/000000291597.jpg", "Datasets/COCO/val2017/000000212226.jpg"]
+    images = ["Datasets/COCO/train2017/000000291597.jpg", "Datasets/COCO/val2017/000000212226.jpg", "Datasets/COCO/val2017/000000212226.jpg"]
     #images = ["Datasets/COCO/train2017/000000291597.jpg"]
     return create_batch(images)
 
@@ -119,12 +238,6 @@ def test_input():
 
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
-    print(G[0].shape)
-    print(G[1].shape)
-    print(G[2].shape)
-    print(G[3].shape)
-
 
 def test_with_pyramidfeatures():
     print("test the pyramid features")
@@ -132,9 +245,20 @@ def test_with_pyramidfeatures():
 
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
-    for i in range(0,len(G)):
-        print(G[i].shape)
+    # the network will calculate the features for each scale
+    on_full_batch = output.predict(image_batch)
+
+    num_layers = len(on_full_batch)
+    # we loop over the items of the batch (images)
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+
+        # loop over the scales
+        for layer in range(num_layers):
+            np.testing.assert_array_equal(on_full_batch[layer][batch_item], on_single_batch_item[layer][0])
+
+    print("pyramidfeatures match in batch")
+
 
 def test_with_pyramid():
     print("test the pyramid")
@@ -154,8 +278,54 @@ def test_with_anchors():
     image_batch = create_temp_batch()
 
     G = output.predict(image_batch)
+
+    for i in range(image_batch.shape[0]):
+        i_batch = output.predict(np.expand_dims(image_batch[i],axis=0))
+        np.testing.assert_array_equal(G[i], i_batch[0])
+
+    print("Anchors match in batch")
+
+
+def test_with_retinanet():
+    print("test the retinanet__")
+    output = create_mod_retinanet()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
+    print("Shape is {}".format(G[0].shape))
+    print("Shape is {}".format(G[1].shape))
+
+    print("There are {} items".format(len(G)))
+    for I in range(len(G)):
+        i_batch = output.predict(np.expand_dims(image_batch[I], axis=0))
+        print("returned {}".format(len(i_batch)))
+        for i in range(len(i_batch)):
+            np.testing.assert_array_equal(G[I][i], i_batch[I][0])
+
+    print("retina match in batch")
+
+
+def test_with_regression():
+    print("test the regression")
+    output = create_mod_regression()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
+    print("SHAPE: {}".format(G.shape))
+
+
+def test_with_full_model():
+    print("test the retinanet")
+    output = create_mod_full()
+
+    image_batch = create_temp_batch()
+
+    G = output.predict(image_batch)
     for i in range(0,len(G)):
         print(G[i].shape)
+
 
 
 
@@ -166,9 +336,23 @@ def test_submodels():
     print(G)
 
 if __name__ == '__main__':
-    test_with_anchors()
+    #NMS = TestNonMaximumSuppression()
+   # NMS.test_simple()
+    #NMS.test_mini_batch()
 
-    test_submodels()
-    #test_input()
+    test_input()
+
+    #test_with_anchors() # succeeds
+
     test_with_pyramidfeatures()
-    test_with_pyramid()
+
+    #test_with_retinanet()
+    #test_with_regression()
+    #test_with_full_model()
+
+
+
+    #test_submodels()
+    #test_input()
+
+    #test_with_pyramid()
