@@ -192,6 +192,9 @@ def OnlyResNetPyramid(inputs, weights='imagenet',batch_size=1, *args, **kwargs):
         weights_path = weights
 
     resnet = keras_resnet.models.ResNet50(image, include_top=False, freeze_bn=True)
+
+    #model.load_weights(weights_path, by_name=True)
+
     _, C3, C4, C5 = resnet.output  # we ignore C2
     pyramid_features = create_pyramid_features(C3, C4, C5)
 

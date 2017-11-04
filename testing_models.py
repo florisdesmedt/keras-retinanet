@@ -238,6 +238,14 @@ def test_input():
 
     image_batch = create_temp_batch()
 
+    on_full_batch = output.predict(image_batch)
+    num_elements = len(on_full_batch)
+
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+        for item in range(num_elements):
+            np.testing.assert_array_equal(on_full_batch[item][batch_item],
+                                          on_single_batch_item[item][0])
 
 def test_with_pyramidfeatures():
     print("test the pyramid features")
@@ -268,16 +276,22 @@ def test_with_pyramid():
 
     # the network will calculate the features for each scale
     on_full_batch = output.predict(image_batch)
-    print("O {}".format(on_full_batch.shape))
-    #num_layers = len(on_full_batch)
+
+    num_layers = len(on_full_batch)
+
     # we loop over the items of the batch (images)
-    #for batch_item in range(image_batch.shape[0]):
-    #    on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
 
         # loop over the scales
-    #    for layer in range(num_layers):
-    #        np.testing.assert_array_equal(on_full_batch[layer][batch_item], on_single_batch_item[layer][0])
-
+        for layer in range(0,num_layers):
+            test_items = 50000
+            #
+            if layer == 0:
+                np.testing.assert_array_equal(on_full_batch[layer][batch_item][:test_items], on_single_batch_item[layer][0][:test_items])
+            else:
+                np.testing.assert_array_equal(on_full_batch[layer][batch_item],
+                                              on_single_batch_item[layer][0])
 
 def test_with_anchors():
     print("test the anchors")
@@ -285,31 +299,31 @@ def test_with_anchors():
 
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
+    # the network will calculate the features for each scale
+    on_full_batch = output.predict(image_batch)
 
-    for i in range(image_batch.shape[0]):
-        i_batch = output.predict(np.expand_dims(image_batch[i],axis=0))
-        np.testing.assert_array_equal(G[i], i_batch[0])
-
-    print("Anchors match in batch")
+    # we loop over the items of the batch (images)
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+        np.testing.assert_array_equal(on_full_batch[batch_item],
+                                      on_single_batch_item[0])
 
 
 def test_with_retinanet():
-    print("test the retinanet__")
+    print("test the retinanet")
     output = create_mod_retinanet()
-
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
-    print("Shape is {}".format(G[0].shape))
-    print("Shape is {}".format(G[1].shape))
+    on_full_batch = output.predict(image_batch)
 
-    print("There are {} items".format(len(G)))
-    for I in range(len(G)):
-        i_batch = output.predict(np.expand_dims(image_batch[I], axis=0))
-        print("returned {}".format(len(i_batch)))
-        for i in range(len(i_batch)):
-            np.testing.assert_array_equal(G[I][i], i_batch[I][0])
+    number_to_check = 50000
+    num_layers = len(on_full_batch)
+    # we loop over the items of the batch (images)
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+        # loop over the scales
+        for layer in range(num_layers):
+            np.testing.assert_array_equal(on_full_batch[layer][batch_item][:number_to_check], on_single_batch_item[layer][0][:number_to_check])
 
     print("retina match in batch")
 
@@ -319,22 +333,30 @@ def test_with_regression():
     output = create_mod_regression()
 
     image_batch = create_temp_batch()
+    number_to_check = 50000
 
-    G = output.predict(image_batch)
-    print("SHAPE: {}".format(G.shape))
+    on_full_batch = output.predict(image_batch)
+    # we loop over the items of the batch (images)
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+        np.testing.assert_array_equal(on_full_batch[batch_item][:number_to_check],
+                                      on_single_batch_item[0][:number_to_check])
 
 
 def test_with_full_model():
-    print("test the retinanet")
+    print("test the full model")
     output = create_mod_full()
 
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
-    for i in range(0,len(G)):
-        print(G[i].shape)
-
-
+    on_full_batch = output.predict(image_batch)
+    num_elements = len(on_full_batch)
+    number_to_check = 50000
+    for batch_item in range(image_batch.shape[0]):
+        on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+        for item in range(num_elements):
+            np.testing.assert_array_equal(on_full_batch[item][batch_item][:number_to_check],
+                                          on_single_batch_item[item][0][:number_to_check])
 
 
 def test_submodels():
@@ -344,23 +366,13 @@ def test_submodels():
     print(G)
 
 if __name__ == '__main__':
-    #NMS = TestNonMaximumSuppression()
-   # NMS.test_simple()
-    #NMS.test_mini_batch()
-
-    test_with_pyramid()
 
     test_input()
     test_with_anchors() # succeeds
     test_with_pyramidfeatures()
+    test_with_pyramid()
+    test_with_retinanet()
+    test_with_regression()
+    test_with_full_model()
 
-    #test_with_retinanet()
-    #test_with_regression()
-    #test_with_full_model()
 
-
-
-    #test_submodels()
-    #test_input()
-
-    #test_with_pyramid()
