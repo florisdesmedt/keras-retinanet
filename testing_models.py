@@ -266,9 +266,17 @@ def test_with_pyramid():
 
     image_batch = create_temp_batch()
 
-    G = output.predict(image_batch)
-    for i in range(0,len(G)):
-        print(G[i].shape)
+    # the network will calculate the features for each scale
+    on_full_batch = output.predict(image_batch)
+    print("O {}".format(on_full_batch.shape))
+    #num_layers = len(on_full_batch)
+    # we loop over the items of the batch (images)
+    #for batch_item in range(image_batch.shape[0]):
+    #    on_single_batch_item = output.predict(np.expand_dims(image_batch[batch_item], axis=0))
+
+        # loop over the scales
+    #    for layer in range(num_layers):
+    #        np.testing.assert_array_equal(on_full_batch[layer][batch_item], on_single_batch_item[layer][0])
 
 
 def test_with_anchors():
@@ -340,10 +348,10 @@ if __name__ == '__main__':
    # NMS.test_simple()
     #NMS.test_mini_batch()
 
+    test_with_pyramid()
+
     test_input()
-
-    #test_with_anchors() # succeeds
-
+    test_with_anchors() # succeeds
     test_with_pyramidfeatures()
 
     #test_with_retinanet()
