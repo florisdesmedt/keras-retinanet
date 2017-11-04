@@ -116,6 +116,7 @@ if __name__ == '__main__':
         steps_per_epoch=len(train_generator.image_ids) // batch_size // epoch_scaling,
         epochs=20 * epoch_scaling,
         verbose=1,
+        workers=8,
         max_queue_size=20,
         validation_data=test_generator,
         validation_steps=len(test_generator.image_ids) // test_batchsize,
