@@ -194,7 +194,7 @@ class CocoIterator(keras.preprocessing.image.Iterator):
 
         image_data = self.load_image(selection)
 
-        if image_data is None:
+        if image_data is None or image_data.shape[0] < self.batch_size:
             return self.next()
 
         return image_data['image_batch'], [image_data['regression_batch'], image_data['labels_batch']]
